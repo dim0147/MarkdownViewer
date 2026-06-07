@@ -5,6 +5,24 @@ rendering with **markdown-it + highlight.js inside WebView2** (Edge/Chromium).
 No admin rights needed — run the portable exe directly, or use the per-user
 installer.
 
+> **A note from the owner:** this repo was mostly written by AI, with quick
+> review and testing by me. It's a simple tool for quickly viewing `.md` files
+> on Windows — thanks for checking it out!
+
+## Screenshots
+
+GitHub-style rendering with tables, task lists, and syntax highlighting:
+
+![Rendered document](images/ui-1.png)
+
+Welcome screen — drag & drop a file or press `Ctrl+O`:
+
+![Welcome screen](images/ui-2.png)
+
+Explorer right-click integration:
+
+![Explorer context menu](images/ui-3.png)
+
 ## Download
 
 Grab `MarkdownViewer-Setup-<version>.exe` from the
