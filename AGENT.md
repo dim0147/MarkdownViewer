@@ -5,10 +5,11 @@ changing anything.
 
 ## What this is
 
-A small native Windows Markdown viewer: a single `MarkdownViewer.exe` (Win32,
-C++17, no installer) that renders `.md` files with **markdown-it +
-highlight.js inside WebView2** (Edge/Chromium). Users open files via Explorer
-right-click, drag & drop, `Ctrl+O`, or the command line.
+A small native Windows Markdown viewer: a single portable `MarkdownViewer.exe`
+(Win32, C++17) that renders `.md` files with **markdown-it + highlight.js
+inside WebView2** (Edge/Chromium). Users open files via Explorer right-click,
+drag & drop, `Ctrl+O`, or the command line. An optional per-user Inno Setup
+installer (`installer/`) wraps the exe for end users — see "Installer" below.
 
 ## Tech stack
 
@@ -48,6 +49,9 @@ tools/
   get_webview2.ps1    downloads the pinned WebView2 SDK into third_party/
   make_icon.ps1       generates res/icon.ico
 third_party/webview2/ WebView2 SDK (gitignored; auto-downloaded by build)
+installer/
+  MarkdownViewer.iss  Inno Setup script — per-user installer (see "Installer")
+  output/             built setup exe (gitignored)
 test/sample.md        rendering smoke test — open it after any renderer change
 build.bat             one-shot CLI build (also: MarkdownViewer.sln for VS)
 ```
@@ -131,6 +135,49 @@ There is no test suite; verification is: build, run
 `MarkdownViewer.exe test\sample.md`, and eyeball the output (headings, task
 checkboxes, highlighted C++ block, table alignment, dark mode if the OS is
 dark). Update `test/sample.md` when adding renderer features.
+
+## Installer (installer/MarkdownViewer.iss)
+
+Inno Setup 7 script producing a **per-user** installer (no admin —
+`PrivilegesRequired=lowest`, installs to `%LOCALAPPDATA%\Programs\Markdown
+Viewer`), matching the app's HKCU-only philosophy.
+
+```bat
+build.bat                                rem produces MarkdownViewer.exe (packaged file)
+ISCC.exe installer\MarkdownViewer.iss    rem → installer\output\MarkdownViewer-Setup-<ver>.exe
+```
+
+Design (full rationale in the .iss header comment):
+
+- **Version** comes from the exe's VERSIONINFO via
+  `GetVersionNumbersString` — bump `res/app.rc` (and `cfg::kAppVersion`),
+  never the .iss.
+- **Install**: exe + README to `{app}`, Start menu shortcut; optional tasks
+  for the Explorer context menu (on by default; runs the app's own
+  `--register`) and a desktop icon. Warns (non-blocking) if the WebView2
+  Runtime is missing.
+- **Uninstall leaves NOTHING behind** — this is a hard guarantee, preserve
+  it. It removes, in order: the context-menu keys via `[UninstallRun]`
+  `--unregister`, then `{app}`, then via `[UninstallDelete]` the runtime
+  caches `%LOCALAPPDATA%\MarkdownViewer` (extracted assets + WebView2
+  profile) and settings `%APPDATA%\MarkdownViewer` (config.json), and
+  finally a `[Code]` fallback sweep deletes the HKCU
+  `SystemFileAssociations\<ext>\shell\MarkdownViewer` keys in case
+  `--unregister` couldn't run.
+
+**Sync invariants** — if you change any of these in C++, mirror the .iss:
+
+| C++ source | .iss counterpart |
+|------------|------------------|
+| `cfg::kMarkdownExts` (config.h) | extension list in `CurUninstallStepChanged` |
+| `cfg::kAppDirName` (config.h) | `#define MyAppDirName` (used by `[UninstallDelete]`) |
+| new on-disk/registry footprint anywhere | new `[UninstallDelete]`/`[Code]` cleanup entry |
+| `--register`/`--unregister` CLI (main.cpp) | `[Run]`/`[UninstallRun]` entries |
+
+To verify a clean uninstall: silent-install (`/VERYSILENT`), launch the app
+once (creates caches), silent-uninstall, then confirm `{app}`, both appdata
+dirs, the Start menu shortcut, the 4 context-menu keys, and
+`HKCU\...\Uninstall\{EE354A00-3CF6-4974-8750-B4BD75B21925}_is1` are all gone.
 
 ## Common tasks
 

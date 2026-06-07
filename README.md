@@ -2,7 +2,24 @@
 
 A small, fast Markdown viewer for Windows: a single native exe (Win32, C++17)
 rendering with **markdown-it + highlight.js inside WebView2** (Edge/Chromium).
-No installer, no admin rights.
+No admin rights needed — run the portable exe directly, or use the per-user
+installer.
+
+## Installing
+
+Run `MarkdownViewer-Setup-<version>.exe` (built from `installer/`, see below).
+It installs per-user to `%LOCALAPPDATA%\Programs\Markdown Viewer` — no
+administrator rights — adds a Start menu entry, and (optionally, on by
+default) the Explorer right-click menu and a desktop icon.
+
+**Uninstalling** (Settings → Apps, or the uninstaller in the install folder)
+removes *everything*: the program files, the Explorer context-menu registry
+entries, and the app's caches and settings
+(`%LOCALAPPDATA%\MarkdownViewer`, `%APPDATA%\MarkdownViewer`). Nothing is
+left behind.
+
+Alternatively, skip the installer entirely: `MarkdownViewer.exe` is fully
+portable.
 
 ## Features
 
@@ -51,6 +68,18 @@ SDK into `third_party/` and generates the app icon automatically.
 Running requires the **WebView2 Runtime**, preinstalled on Windows 11 and
 recent Windows 10.
 
+### Building the installer
+
+Requires [Inno Setup](https://jrsoftware.org/isinfo.php) (7.x):
+
+```bat
+build.bat
+ISCC.exe installer\MarkdownViewer.iss
+```
+
+Output: `installer\output\MarkdownViewer-Setup-<version>.exe`. The version is
+read from the exe's version resource (`res/app.rc`).
+
 ## Explorer right-click menu
 
 | Action  | How |
@@ -71,6 +100,7 @@ src/          C++ shell: window, WebView2 host, file IO, registry (see AGENT.md)
 assets/       web renderer: index.html, app.js (markdown-it), app.css, vendor libs
 res/          icon, manifest, version info; embeds assets/ into the exe
 tools/        WebView2 SDK fetcher, icon generator
+installer/    Inno Setup script → per-user installer (output/ is gitignored)
 test/         sample.md rendering smoke test
 AGENT.md      architecture guide for maintainers (start here)
 ```

@@ -433,3 +433,4 @@ third_party/
 res/icon.ico
 res/app.res
 src/*.obj
+installer/output/
