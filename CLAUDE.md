@@ -52,7 +52,9 @@ third_party/webview2/ WebView2 SDK (gitignored; auto-downloaded by build)
 installer/
   MarkdownViewer.iss  Inno Setup script — per-user installer (see "Installer")
   output/             built setup exe (gitignored)
-test/sample.md        rendering smoke test — open it after any renderer change
+test/
+  sample.md           rendering smoke test — open it after any renderer change
+  manual/             link-behavior tests (viewer/browser/anchor/ignored links)
 build.bat             one-shot CLI build (also: MarkdownViewer.sln for VS)
 ```
 
@@ -88,8 +90,11 @@ Key points:
     index.html).
 - **Navigation policy** (`WebViewHost::HandleNavigation`): the webview is only
   ever allowed to display `viewer.assets/*`. Clicks on `.md` links under
-  `viewer.doc` reopen in the viewer; everything else (http/https/mailto,
-  non-md doc files) is cancelled and handed to the OS (`ShellExecute`).
+  `viewer.doc` reopen in the viewer — but only after URL-decoding,
+  canonicalizing (`fileio::full_path`), and verifying the target stays inside
+  the document's folder (`path_is_under`). Links to non-md local files are
+  **ignored** (the viewer never launches or reveals files on disk); web links
+  (http/https/mailto) are cancelled and handed to the default browser.
   In-page `#anchor` clicks never navigate — app.js intercepts and scrolls.
 - **Keyboard**: the webview owns focus, so `Ctrl+O`/`F5` are caught in
   `add_AcceleratorKeyPressed` and posted to the main window as `WM_COMMAND`.
@@ -116,6 +121,11 @@ Two distinct things, don't mix them up:
 - `markdown-it` runs with **`html: false`** — raw HTML in documents is escaped,
   so documents cannot inject script. If you ever enable `html: true`, you MUST
   add a sanitizer (e.g. DOMPurify) in front of `innerHTML`.
+- `index.html` carries a **CSP meta tag** (`default-src 'none'`; scripts/styles
+  only from `viewer.assets`, images from the two virtual hosts + `data:`) as a
+  second layer behind `html: false`; it also blocks remote-image tracking
+  pixels. Adding a vendor lib or asset host means extending the CSP, never
+  removing it.
 - The navigation allow-list in `HandleNavigation` keeps arbitrary web content
   out of the (privileged-feeling) app window.
 - `put_AreHostObjectsAllowed(FALSE)`; the only host↔web channel is JSON
@@ -134,7 +144,9 @@ into `third_party/` on first build. `res/icon.ico` is generated on first build.
 There is no test suite; verification is: build, run
 `MarkdownViewer.exe test\sample.md`, and eyeball the output (headings, task
 checkboxes, highlighted C++ block, table alignment, dark mode if the OS is
-dark). Update `test/sample.md` when adding renderer features.
+dark). Update `test/sample.md` when adding renderer features. After touching
+navigation/link handling, also open `test\manual\README-test.md` and click
+through its link matrix (viewer / browser / anchor / ignored).
 
 ## Installer (installer/MarkdownViewer.iss)
 

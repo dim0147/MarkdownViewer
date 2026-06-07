@@ -25,9 +25,13 @@ Explorer right-click integration:
 
 ## Download
 
-Grab `MarkdownViewer-Setup-<version>.exe` from the
-[latest release](https://github.com/dim0147/MarkdownViewer/releases/latest)
-and run it. Or build from source — see [Building](#building).
+From the [latest release](https://github.com/dim0147/MarkdownViewer/releases/latest):
+
+- `MarkdownViewer-Setup-<version>.exe` — per-user installer (recommended)
+- `MarkdownViewer-Portable-<version>.zip` — just the exe, no install; unzip
+  and run
+
+Or build from source — see [Building](#building).
 
 ## Installing
 
@@ -58,6 +62,9 @@ portable.
 - `F5` reloads the file *and* your settings (handy while editing)
 - Clicking a relative `.md` link opens it in the viewer; external links open
   in your default browser
+- **Safe by design** — raw HTML in documents is escaped (backed by a strict
+  CSP), document links can't escape the document's folder, and the viewer
+  never launches other local files
 - Handles UTF-8 / UTF-16 / ANSI files; relative images resolve against the
   document's folder
 
@@ -125,6 +132,6 @@ assets/       web renderer: index.html, app.js (markdown-it), app.css, vendor li
 res/          icon, manifest, version info; embeds assets/ into the exe
 tools/        WebView2 SDK fetcher, icon generator
 installer/    Inno Setup script → per-user installer (output/ is gitignored)
-test/         sample.md rendering smoke test
+test/         sample.md rendering smoke test; manual/ link-behavior tests
 CLAUDE.md     architecture guide for maintainers (start here)
 ```

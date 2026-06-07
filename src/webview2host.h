@@ -145,6 +145,16 @@ private:
         return s.size() >= n && _wcsnicmp(s.c_str(), prefix, n) == 0;
     }
 
+    // True if canonical path `p` lies inside directory `base` (case-insensitive).
+    // The trailing-separator boundary stops "C:\docs-secret" counting as under
+    // "C:\docs".
+    static bool path_is_under(std::wstring p, std::wstring base) {
+        if (p.empty() || base.empty()) return false;
+        if (base.back() != L'\\') base += L'\\';
+        return p.size() >= base.size() &&
+               _wcsnicmp(p.c_str(), base.c_str(), base.size()) == 0;
+    }
+
     // Take ownership of a CoTaskMem string returned by a WebView2 getter.
     static std::wstring take(LPWSTR s) {
         std::wstring out = s ? s : L"";
@@ -241,20 +251,31 @@ inline bool WebViewHost::HandleNavigation(const std::wstring& uri) {
     if (starts_with(uri, (std::wstring(L"https://") + cfg::kAssetsHost + L"/").c_str()))
         return true;
 
-    // Link into the current document's folder: open .md files in the viewer.
+    // Link into the current document's folder. ONLY linked .md files are acted
+    // on - they render in the viewer (safe: html:false, no exfil), which is the
+    // whole point of the app. Every other local file is ignored: the viewer
+    // never launches or reveals files on disk, so a crafted document cannot
+    // turn a click into running/opening an executable or any other local file.
     if (starts_with(uri, cfg::kDocBaseUrl) && !m_docDir.empty()) {
         std::wstring rel = uri.substr(lstrlenW(cfg::kDocBaseUrl));
         size_t hash = rel.find_first_of(L"#?");
         if (hash != std::wstring::npos) rel = rel.substr(0, hash);
-        std::wstring path = rel;
-        for (wchar_t& c : path) if (c == L'/') c = L'\\';
-        path = m_docDir + L"\\" + fileio::url_decode(path);
-        if (fileio::has_markdown_ext(path)) {
-            if (onOpenFile) onOpenFile(path);
-        } else if (fileio::file_exists(path)) {
-            ShellExecuteW(nullptr, L"open", path.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+        // Decode %XX FIRST, then normalize separators: otherwise an encoded
+        // slash ("%2f") would survive separator handling and reappear after
+        // decoding, smuggling extra path segments past the browser's own
+        // ".."-normalization.
+        rel = fileio::url_decode(rel);
+        for (wchar_t& c : rel) if (c == L'/') c = L'\\';
+        // Canonicalize, then require the result to stay inside the document's
+        // folder. Without this an encoded "..%2f" (which the browser's own
+        // ".."-normalization never sees) could escape m_docDir and render any
+        // .md file on disk.
+        std::wstring path = fileio::full_path(m_docDir + L"\\" + rel);
+        if (!path.empty() && path_is_under(path, fileio::full_path(m_docDir)) &&
+            fileio::has_markdown_ext(path) && fileio::file_exists(path)) {
+            if (onOpenFile) onOpenFile(path);      // render linked markdown
         }
-        return false;
+        return false;                              // never open/reveal local files
     }
 
     // Anything external: hand off to the default browser.

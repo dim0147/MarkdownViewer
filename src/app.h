@@ -73,13 +73,17 @@ public:
                           L"All files (*.*)\0*.*\0";
         ofn.lpstrFile = file;
         ofn.nMaxFile = 4096;
-        ofn.Flags = OFN_FILEMUSTEXIST | OFN_HIDEREADONLY;
+        ofn.Flags = OFN_FILEMUSTEXIST | OFN_HIDEREADONLY | OFN_NOCHANGEDIR;
         if (GetOpenFileNameW(&ofn)) OpenFile(file);
     }
 
     void OpenConfigFile() {
         settings::load_or_create();
-        ShellExecuteW(m_hwnd, L"open", L"notepad.exe",
+        // Full path: a bare "notepad.exe" would let ShellExecute search the
+        // current directory, which can be attacker-controlled (doc's folder).
+        wchar_t sysdir[MAX_PATH] = L"";
+        GetSystemDirectoryW(sysdir, MAX_PATH);
+        ShellExecuteW(m_hwnd, L"open", (std::wstring(sysdir) + L"\\notepad.exe").c_str(),
                       (L"\"" + settings::config_path() + L"\"").c_str(), nullptr, SW_SHOWNORMAL);
     }
 

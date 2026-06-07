@@ -86,6 +86,15 @@ inline bool file_exists(const std::wstring& path) {
     return a != INVALID_FILE_ATTRIBUTES && !(a & FILE_ATTRIBUTE_DIRECTORY);
 }
 
+// Canonicalize a path: resolve "." / ".." and make it fully qualified.
+// Returns an empty string on failure (treat that as "reject").
+inline std::wstring full_path(const std::wstring& path) {
+    wchar_t buf[4096];
+    DWORD n = GetFullPathNameW(path.c_str(), 4096, buf, nullptr);
+    if (n == 0 || n >= 4096) return std::wstring();
+    return std::wstring(buf, n);
+}
+
 // Create a directory tree (no-op if it already exists).
 inline bool ensure_dir(const std::wstring& path) {
     int r = SHCreateDirectoryExW(nullptr, path.c_str(), nullptr);
@@ -158,7 +167,10 @@ inline std::wstring url_decode(const std::wstring& in) {
     };
     for (size_t i = 0; i < in.size(); ++i) {
         if (in[i] == L'%' && i + 2 < in.size() && hex(in[i + 1]) >= 0 && hex(in[i + 2]) >= 0) {
-            u8 += (char)(hex(in[i + 1]) * 16 + hex(in[i + 2]));
+            int byte = hex(in[i + 1]) * 16 + hex(in[i + 2]);
+            // Drop NUL / control bytes: a decoded path must never contain them
+            // (e.g. "%00" truncating a path, or smuggled control chars).
+            if (byte >= 0x20) u8 += (char)byte;
             i += 2;
         } else {
             u8 += narrow(std::wstring(1, in[i]));
