@@ -73,7 +73,7 @@
     <None Include="README.md">
       <Filter>Docs</Filter>
     </None>
-    <None Include="AGENT.md">
+    <None Include="CLAUDE.md">
       <Filter>Docs</Filter>
     </None>
     <None Include=".gitignore" />

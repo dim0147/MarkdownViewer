@@ -434,3 +434,5 @@ res/icon.ico
 res/app.res
 src/*.obj
 installer/output/
+/MarkdownViewer.exe
+.claude/settings.local.json

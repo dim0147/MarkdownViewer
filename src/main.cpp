@@ -2,7 +2,7 @@
 //   * Open .md files via Explorer right-click ("View with Markdown Viewer"),
 //     drag & drop onto the window, File > Open, or the command line.
 //   * Renders with markdown-it + highlight.js inside WebView2 (Edge/Chromium).
-// See AGENT.md for the architecture overview.
+// See CLAUDE.md for the architecture overview.
 
 #include <windows.h>
 #include <shellapi.h>

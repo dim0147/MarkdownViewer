@@ -24,7 +24,7 @@
 
   function buildParser() {
     md = window.markdownit({
-      html: false,                 // KEEP false: escapes raw HTML (XSS safety)
+      html: false,                 // keep disabled: raw HTML is escaped (see header note)
       linkify: !!cfg.linkify,
       typographer: !!cfg.typographer,
       highlight: (code, lang) => {

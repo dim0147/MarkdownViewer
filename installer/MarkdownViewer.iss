@@ -3,7 +3,7 @@
 ; Build:   ISCC.exe installer\MarkdownViewer.iss   (after build.bat)
 ; Output:  installer\output\MarkdownViewer-Setup-<version>.exe
 ;
-; Design notes (keep in sync with AGENT.md "Installer" section):
+; Design notes (keep in sync with CLAUDE.md "Installer" section):
 ;  - Per-user install (PrivilegesRequired=lowest), no admin needed - mirrors
 ;    the app's own HKCU-only philosophy. Installs to %LOCALAPPDATA%\Programs.
 ;  - Version is read from the exe's VERSIONINFO (res\app.rc) - do not hardcode.

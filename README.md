@@ -5,12 +5,18 @@ rendering with **markdown-it + highlight.js inside WebView2** (Edge/Chromium).
 No admin rights needed — run the portable exe directly, or use the per-user
 installer.
 
+## Download
+
+Grab `MarkdownViewer-Setup-<version>.exe` from the
+[latest release](https://github.com/dim0147/MarkdownViewer/releases/latest)
+and run it. Or build from source — see [Building](#building).
+
 ## Installing
 
-Run `MarkdownViewer-Setup-<version>.exe` (built from `installer/`, see below).
-It installs per-user to `%LOCALAPPDATA%\Programs\Markdown Viewer` — no
-administrator rights — adds a Start menu entry, and (optionally, on by
-default) the Explorer right-click menu and a desktop icon.
+The installer is per-user: it installs to
+`%LOCALAPPDATA%\Programs\Markdown Viewer` — no administrator rights — adds a
+Start menu entry, and (optionally, on by default) the Explorer right-click
+menu and a desktop icon.
 
 **Uninstalling** (Settings → Apps, or the uninstaller in the install folder)
 removes *everything*: the program files, the Explorer context-menu registry
@@ -96,11 +102,11 @@ It covers `.md`, `.markdown`, `.mdown`, and `.mkd`.
 ## Project layout
 
 ```
-src/          C++ shell: window, WebView2 host, file IO, registry (see AGENT.md)
+src/          C++ shell: window, WebView2 host, file IO, registry (see CLAUDE.md)
 assets/       web renderer: index.html, app.js (markdown-it), app.css, vendor libs
 res/          icon, manifest, version info; embeds assets/ into the exe
 tools/        WebView2 SDK fetcher, icon generator
 installer/    Inno Setup script → per-user installer (output/ is gitignored)
 test/         sample.md rendering smoke test
-AGENT.md      architecture guide for maintainers (start here)
+CLAUDE.md     architecture guide for maintainers (start here)
 ```

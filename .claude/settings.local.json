@@ -1,7 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "PowerShell($tools = @\\('cl', 'g++', 'clang++', 'cmake'\\); foreach \\($t in $tools\\) { $c = Get-Command $t -ErrorAction SilentlyContinue; if \\($c\\) { \"$t : $\\($c.Source\\)\" } else { \"$t : NOT FOUND\" } })"
-    ]
-  }
-}

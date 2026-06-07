@@ -78,7 +78,7 @@ public:
     }
 
     void OpenConfigFile() {
-        settings::load_or_create();   // make sure it exists
+        settings::load_or_create();
         ShellExecuteW(m_hwnd, L"open", L"notepad.exe",
                       (L"\"" + settings::config_path() + L"\"").c_str(), nullptr, SW_SHOWNORMAL);
     }

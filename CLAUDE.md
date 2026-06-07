@@ -1,6 +1,6 @@
-# AGENT.md — Markdown Viewer
+# CLAUDE.md — Markdown Viewer
 
-Guide for AI agents (and humans) maintaining this codebase. Read this before
+Architecture and maintenance guide for this codebase. Read this before
 changing anything.
 
 ## What this is

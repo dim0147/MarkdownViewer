@@ -109,7 +109,7 @@
     <None Include="assets\app.js" />
     <None Include="test\sample.md" />
     <None Include="README.md" />
-    <None Include="AGENT.md" />
+    <None Include="CLAUDE.md" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -13,7 +13,7 @@
 
 namespace settings {
 
-// Default config written on first run. Documented for users who open the file.
+// Default config written on first run.
 inline const char kDefaultConfigJson[] =
 R"({
   "theme": "auto",
