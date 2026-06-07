@@ -1,0 +1,25 @@
+<!doctype html>
+<!-- Viewer UI shell. Served from https://viewer.assets/ (a WebView2 virtual
+     host). <base> points at https://viewer.doc/ - the current document's
+     folder - so relative links/images in rendered markdown resolve; asset
+     URLs below are therefore absolute. Logic lives in app.js. -->
+<html>
+<head>
+<meta charset="utf-8">
+<title>Markdown Viewer</title>
+<base href="https://viewer.doc/">
+<link id="css-md-light" rel="stylesheet" href="https://viewer.assets/vendor/github-markdown-light.min.css" media="(prefers-color-scheme: light)">
+<link id="css-md-dark"  rel="stylesheet" href="https://viewer.assets/vendor/github-markdown-dark.min.css"  media="(prefers-color-scheme: dark)">
+<link id="css-hl-light" rel="stylesheet" href="https://viewer.assets/vendor/hljs-github.min.css"           media="(prefers-color-scheme: light)">
+<link id="css-hl-dark"  rel="stylesheet" href="https://viewer.assets/vendor/hljs-github-dark.min.css"      media="(prefers-color-scheme: dark)">
+<link rel="stylesheet" href="https://viewer.assets/app.css">
+</head>
+<body>
+<main id="content" class="markdown-body"></main>
+<script src="https://viewer.assets/vendor/markdown-it.min.js"></script>
+<script src="https://viewer.assets/vendor/markdown-it-task-lists.min.js"></script>
+<script src="https://viewer.assets/vendor/markdown-it-anchor.min.js"></script>
+<script src="https://viewer.assets/vendor/highlight.min.js"></script>
+<script src="https://viewer.assets/app.js"></script>
+</body>
+</html>

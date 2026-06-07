@@ -427,3 +427,9 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+# ---- project specific ----
+build/
+third_party/
+res/icon.ico
+res/app.res
+src/*.obj

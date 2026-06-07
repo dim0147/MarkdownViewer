@@ -13,6 +13,10 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;manifest</Extensions>
     </Filter>
+    <Filter Include="Web Assets">
+      <UniqueIdentifier>{B2C3D4E5-F6A7-4890-ABCD-EF0123456789}</UniqueIdentifier>
+      <Extensions>html;css;js</Extensions>
+    </Filter>
     <Filter Include="Docs">
       <UniqueIdentifier>{A1B2C3D4-E5F6-4789-9ABC-DEF012345678}</UniqueIdentifier>
     </Filter>
@@ -23,10 +27,25 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\markdown.h">
+    <ClInclude Include="src\app.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\webhost.h">
+    <ClInclude Include="src\assets.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\config.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\fileio.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\registry.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\settings.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\webview2host.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -39,10 +58,22 @@
     <None Include="res\app.manifest">
       <Filter>Resource Files</Filter>
     </None>
+    <None Include="assets\index.html">
+      <Filter>Web Assets</Filter>
+    </None>
+    <None Include="assets\app.css">
+      <Filter>Web Assets</Filter>
+    </None>
+    <None Include="assets\app.js">
+      <Filter>Web Assets</Filter>
+    </None>
     <None Include="test\sample.md">
       <Filter>Docs</Filter>
     </None>
     <None Include="README.md">
+      <Filter>Docs</Filter>
+    </None>
+    <None Include="AGENT.md">
       <Filter>Docs</Filter>
     </None>
     <None Include=".gitignore" />

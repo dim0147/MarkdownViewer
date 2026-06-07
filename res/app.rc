@@ -3,9 +3,23 @@
 1 ICON "icon.ico"
 CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "app.manifest"
 
+// Web UI assets, embedded so the exe stays self-contained. Extracted at
+// startup by src\assets.h (keep the two lists in sync).
+ASSET_INDEX_HTML       RCDATA "..\\assets\\index.html"
+ASSET_APP_CSS          RCDATA "..\\assets\\app.css"
+ASSET_APP_JS           RCDATA "..\\assets\\app.js"
+ASSET_MARKDOWN_IT      RCDATA "..\\assets\\vendor\\markdown-it.min.js"
+ASSET_MDIT_TASK_LISTS  RCDATA "..\\assets\\vendor\\markdown-it-task-lists.min.js"
+ASSET_MDIT_ANCHOR      RCDATA "..\\assets\\vendor\\markdown-it-anchor.min.js"
+ASSET_HLJS             RCDATA "..\\assets\\vendor\\highlight.min.js"
+ASSET_HLJS_CSS_LIGHT   RCDATA "..\\assets\\vendor\\hljs-github.min.css"
+ASSET_HLJS_CSS_DARK    RCDATA "..\\assets\\vendor\\hljs-github-dark.min.css"
+ASSET_GHMD_CSS_LIGHT   RCDATA "..\\assets\\vendor\\github-markdown-light.min.css"
+ASSET_GHMD_CSS_DARK    RCDATA "..\\assets\\vendor\\github-markdown-dark.min.css"
+
 VS_VERSION_INFO VERSIONINFO
-FILEVERSION     1,0,0,0
-PRODUCTVERSION  1,0,0,0
+FILEVERSION     2,0,0,0
+PRODUCTVERSION  2,0,0,0
 FILEOS          VOS_NT_WINDOWS32
 FILETYPE        VFT_APP
 BEGIN
@@ -14,9 +28,9 @@ BEGIN
         BLOCK "040904b0"
         BEGIN
             VALUE "FileDescription",  "Markdown Viewer"
-            VALUE "FileVersion",      "1.0.0.0"
+            VALUE "FileVersion",      "2.0.0.0"
             VALUE "ProductName",      "Markdown Viewer"
-            VALUE "ProductVersion",   "1.0.0.0"
+            VALUE "ProductVersion",   "2.0.0.0"
             VALUE "OriginalFilename", "MarkdownViewer.exe"
         END
     END

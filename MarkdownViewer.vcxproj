@@ -50,11 +50,17 @@
       <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalIncludeDirectories>$(SolutionDir)third_party\webview2\build\native\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>$(SolutionDir)third_party\webview2\build\native\x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
+    <PreBuildEvent>
+      <Command>powershell -NoProfile -ExecutionPolicy Bypass -File "$(SolutionDir)tools\get_webview2.ps1"</Command>
+      <Message>Ensure WebView2 SDK is present</Message>
+    </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -66,20 +72,31 @@
       <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalIncludeDirectories>$(SolutionDir)third_party\webview2\build\native\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>$(SolutionDir)third_party\webview2\build\native\x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
+    <PreBuildEvent>
+      <Command>powershell -NoProfile -ExecutionPolicy Bypass -File "$(SolutionDir)tools\get_webview2.ps1"</Command>
+      <Message>Ensure WebView2 SDK is present</Message>
+    </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="src\main.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\markdown.h" />
-    <ClInclude Include="src\webhost.h" />
+    <ClInclude Include="src\app.h" />
+    <ClInclude Include="src\assets.h" />
+    <ClInclude Include="src\config.h" />
+    <ClInclude Include="src\fileio.h" />
+    <ClInclude Include="src\registry.h" />
+    <ClInclude Include="src\settings.h" />
+    <ClInclude Include="src\webview2host.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="res\app.rc" />
@@ -87,8 +104,12 @@
   <ItemGroup>
     <None Include=".gitignore" />
     <None Include="res\app.manifest" />
+    <None Include="assets\index.html" />
+    <None Include="assets\app.css" />
+    <None Include="assets\app.js" />
     <None Include="test\sample.md" />
     <None Include="README.md" />
+    <None Include="AGENT.md" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
