@@ -41,6 +41,8 @@ static HMENU build_menu() {
     AppendMenuW(tools, MF_STRING, cfg::ID_SETTINGS, L"&Settings...");
     AppendMenuW(tools, MF_STRING, cfg::ID_OPENCONFIG, L"Edit config.json in &editor");
     HMENU help = CreatePopupMenu();
+    AppendMenuW(help, MF_STRING, cfg::ID_CHECK_UPDATE, L"Check for &Updates...");
+    AppendMenuW(help, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(help, MF_STRING, cfg::ID_ABOUT, L"&About");
     HMENU bar = CreateMenu();
     AppendMenuW(bar, MF_POPUP, (UINT_PTR)file, L"&File");
@@ -91,6 +93,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         case cfg::ID_UNINSTALL:  reg::uninstall_context_menu(hwnd, false); return 0;
         case cfg::ID_SETTINGS:   g_app.OpenSettings(); return 0;
         case cfg::ID_OPENCONFIG: g_app.OpenConfigFile(); return 0;
+        case cfg::ID_CHECK_UPDATE: g_app.CheckForUpdates(); return 0;
         case cfg::ID_RECENT_CLEAR: g_app.ClearRecent(); return 0;
         case cfg::ID_ABOUT:
             MessageBoxW(hwnd,
@@ -116,6 +119,15 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         g_app.Shutdown();
         PostQuitMessage(0);
         return 0;
+
+    default:
+        // Update-check result delivered from update::check_async's worker thread.
+        if (msg == cfg::WM_APP_UPDATE_RESULT) {
+            update::Result* r = reinterpret_cast<update::Result*>(lp);
+            if (r) { g_app.OnUpdateResult(*r); delete r; }
+            return 0;
+        }
+        break;
     }
     return DefWindowProcW(hwnd, msg, wp, lp);
 }

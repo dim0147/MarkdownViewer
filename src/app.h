@@ -21,6 +21,7 @@
 #include "recent.h"
 #include "assets.h"
 #include "webview2host.h"
+#include "update.h"
 
 class App {
 public:
@@ -131,6 +132,38 @@ public:
         if (!m_ready) return;
         SendConfig();
         m_web.PostJson(L"{\"type\":\"settings\"}");
+    }
+
+    // Help > Check for Updates...: query the GitHub Releases API on a background
+    // thread; OnUpdateResult() handles the answer back on the UI thread.
+    void CheckForUpdates() {
+        update::check_async(m_hwnd);
+    }
+
+    void OnUpdateResult(const update::Result& r) {
+        switch (r.status) {
+        case update::Status::UpToDate:
+            MessageBoxW(m_hwnd,
+                        (std::wstring(L"You're up to date.\n\nMarkdown Viewer ") +
+                         cfg::kAppVersion + L" is the latest version.").c_str(),
+                        cfg::kAppTitle, MB_OK | MB_ICONINFORMATION);
+            break;
+        case update::Status::Available: {
+            std::wstring msg = L"A new version of Markdown Viewer is available.\n\n"
+                               L"Installed: " + std::wstring(cfg::kAppVersion) + L"\n"
+                               L"Latest: " + r.latest + L"\n\n"
+                               L"Open the download page in your browser?";
+            if (MessageBoxW(m_hwnd, msg.c_str(), cfg::kAppTitle,
+                            MB_YESNO | MB_ICONINFORMATION) == IDYES)
+                ShellExecuteW(m_hwnd, L"open", cfg::kReleasesPageUrl, nullptr, nullptr,
+                              SW_SHOWNORMAL);
+            break;
+        }
+        case update::Status::Error:
+            MessageBoxW(m_hwnd, (L"Could not check for updates.\n\n" + r.message).c_str(),
+                        cfg::kAppTitle, MB_OK | MB_ICONWARNING);
+            break;
+        }
     }
 
     void OpenConfigFile() {

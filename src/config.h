@@ -8,7 +8,7 @@
 namespace cfg {
 
 constexpr wchar_t kAppTitle[]    = L"Markdown Viewer";
-constexpr wchar_t kAppVersion[]  = L"2.1";
+constexpr wchar_t kAppVersion[]  = L"2.2";
 constexpr wchar_t kWindowClass[] = L"MarkdownViewerWnd";
 constexpr wchar_t kAppDirName[]  = L"MarkdownViewer";   // folder name under %APPDATA% / %LOCALAPPDATA%
 
@@ -22,6 +22,14 @@ constexpr wchar_t kAssetsHost[] = L"viewer.assets";
 constexpr wchar_t kDocHost[]    = L"viewer.doc";
 constexpr wchar_t kIndexUrl[]   = L"https://viewer.assets/index.html";
 constexpr wchar_t kDocBaseUrl[] = L"https://viewer.doc/";
+
+// GitHub repository backing Help > Check for Updates (see src/update.h). The
+// API request is the app's only outbound network call, made solely on user
+// request; kReleasesPageUrl is opened in the default browser when an update
+// is offered.
+constexpr wchar_t kUpdateHost[]      = L"api.github.com";
+constexpr wchar_t kUpdatePath[]      = L"/repos/dim0147/MarkdownViewer/releases/latest";
+constexpr wchar_t kReleasesPageUrl[] = L"https://github.com/dim0147/MarkdownViewer/releases/latest";
 
 constexpr long long kMaxFileBytes = 64LL * 1024 * 1024;   // refuse files larger than 64 MB
 
@@ -43,11 +51,17 @@ enum : UINT {
     ID_UNINSTALL   = 202,
     ID_OPENCONFIG  = 203,
     ID_SETTINGS    = 204,
-    ID_ABOUT       = 301,
+    ID_ABOUT        = 301,
+    ID_CHECK_UPDATE = 302,
     // Dynamic File > Open Recent entries occupy [ID_RECENT_BASE,
     // ID_RECENT_BASE + kMaxRecent). Keep ID_RECENT_CLEAR clear of that range.
     ID_RECENT_BASE  = 600,
     ID_RECENT_CLEAR = 700,
 };
+
+// Posted by update::check_async() (background thread) to the main window when an
+// update check finishes; lParam is a heap-allocated update::Result* that the
+// handler takes ownership of and must delete.
+constexpr UINT WM_APP_UPDATE_RESULT = WM_APP + 1;
 
 } // namespace cfg

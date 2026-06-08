@@ -37,6 +37,8 @@ src/                  C++ (header-only modules, all included by main.cpp)
                       navigation policy, ComHandler<> callback template
   fileio.h            encoding-aware file read, paths, JSON-escape, URL-decode
   settings.h          runtime config.json (create defaults / load raw text)
+  update.h            Help > Check for Updates: GitHub Releases API over
+                      WinHTTP on a worker thread, version compare
   assets.h            extracts embedded RCDATA assets to disk at startup
   registry.h          per-user (HKCU) Explorer context-menu install/remove
 assets/               web UI, embedded into the exe via res/app.rc
@@ -131,6 +133,11 @@ Two distinct things, don't mix them up:
 - `put_AreHostObjectsAllowed(FALSE)`; the only host↔web channel is JSON
   messages.
 - Explorer integration is strictly per-user `HKCU` (no admin, easy uninstall).
+- **The update check (`update.h`) is the app's only outbound network request**,
+  made over WinHTTP solely when the user clicks Help > Check for Updates. It
+  hits `api.github.com` (read-only, no auth/telemetry), never touches the
+  webview, and only ever hands the releases page to the default browser via
+  `ShellExecute`. Keep it user-initiated — do not add silent/background polling.
 
 ## Build
 
