@@ -59,18 +59,64 @@
     content.style.fontSize = (c.fontSize | 0) > 0 ? (c.fontSize | 0) + 'px' : '';
   }
 
+  // ---- mermaid diagrams ----------------------------------------------------
+  // ```mermaid fences survive markdown-it as <pre><code class="language-mermaid">
+  // (highlight.js has no "mermaid" grammar, so the source passes through escaped
+  // but intact). After each render we swap those blocks for SVG that mermaid
+  // generates. securityLevel:'strict' keeps document-supplied labels sanitized
+  // and disables click/script directives; theme follows the resolved app theme.
+  let mermaidSeq = 0;
+
+  function mermaidIsDark(c) {
+    if (c.theme === 'dark') return true;
+    if (c.theme === 'light') return false;
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;   // auto
+  }
+
+  function initMermaid(c) {
+    if (!window.mermaid) return;
+    try {
+      window.mermaid.initialize({
+        startOnLoad: false,
+        securityLevel: 'strict',
+        theme: mermaidIsDark(c) ? 'dark' : 'default',
+      });
+    } catch (e) { console.warn('mermaid init failed:', e); }
+  }
+
+  function renderMermaid() {
+    if (!window.mermaid) return;
+    for (const code of content.querySelectorAll('pre > code.language-mermaid')) {
+      const pre = code.parentElement;
+      const src = code.textContent;
+      const id = 'mmd-' + (++mermaidSeq);
+      window.mermaid.render(id, src).then(({ svg }) => {
+        if (!pre.isConnected) return;             // doc changed mid-render
+        const fig = document.createElement('div');
+        fig.className = 'mermaid';
+        fig.innerHTML = svg;                      // trusted: strict-mode mermaid output
+        pre.replaceWith(fig);
+      }).catch((err) => {
+        pre.classList.add('mermaid-error');       // leave source visible on parse error
+        pre.title = String((err && err.message) || err);
+      });
+    }
+  }
+
   // Re-render the current document with the current parser (keeps scroll).
   function rerender() {
     if (!currentName) return;
     const scroll = window.scrollY;
     content.innerHTML = md.render(currentText || '');
     window.scrollTo(0, scroll);
+    renderMermaid();
   }
 
   // Adopt a config object: style + parser + (if a doc is open) re-render.
   function applyConfigObj(c) {
     applyStyle(c);
     buildParser(c);
+    initMermaid(c);
     rerender();
   }
 
@@ -81,6 +127,7 @@
     cfg = { ...DEFAULTS, ...user };
     applyStyle(cfg);
     buildParser(cfg);
+    initMermaid(cfg);
     // The host follows a config message with a render/welcome message on load
     // and reload, so no explicit rerender() is needed here.
   }
@@ -92,6 +139,7 @@
     currentText = text || '';
     content.innerHTML = md.render(currentText);
     window.scrollTo(0, scroll);
+    renderMermaid();
   }
 
   function showWelcome() {
@@ -278,5 +326,6 @@
   });
 
   buildParser(cfg);
+  initMermaid(cfg);
   window.chrome.webview.postMessage('ready');   // host replies with config + document
 })();

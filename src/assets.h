@@ -26,6 +26,7 @@ inline const Entry kAssets[] = {
     { L"ASSET_MDIT_TASK_LISTS",  L"vendor\\markdown-it-task-lists.min.js" },
     { L"ASSET_MDIT_ANCHOR",      L"vendor\\markdown-it-anchor.min.js" },
     { L"ASSET_HLJS",             L"vendor\\highlight.min.js" },
+    { L"ASSET_MERMAID",          L"vendor\\mermaid.min.js" },
     { L"ASSET_HLJS_CSS_LIGHT",   L"vendor\\hljs-github.min.css" },
     { L"ASSET_HLJS_CSS_DARK",    L"vendor\\hljs-github-dark.min.css" },
     { L"ASSET_GHMD_CSS_LIGHT",   L"vendor\\github-markdown-light.min.css" },

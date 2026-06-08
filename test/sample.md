@@ -39,6 +39,17 @@ int main() {
 >
 > > Nested quotes also work.
 
+## Mermaid diagram
+
+```mermaid
+flowchart LR
+    A[Open .md file] --> B{Has mermaid block?}
+    B -- yes --> C[mermaid.render]
+    B -- no --> D[markdown-it only]
+    C --> E([SVG in document])
+    D --> E
+```
+
 ---
 
 Setext Heading

@@ -10,7 +10,12 @@
      markdown-it (html:false), injected script/styles would not execute and
      nothing could be exfiltrated. Also blocks remote images (tracking pixels);
      add https: to img-src if remote images should be allowed. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src https://viewer.assets; style-src https://viewer.assets; img-src https://viewer.assets https://viewer.doc data:;">
+<!-- style-src allows 'unsafe-inline' because Mermaid injects <style> into the
+     SVGs it generates. script-src stays locked to viewer.assets (the part that
+     blocks injected JS); Mermaid runs at securityLevel:'strict' (labels
+     sanitized, click/script directives disabled), and html:false keeps document
+     HTML escaped, so no document-controlled markup reaches the DOM. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src https://viewer.assets; style-src https://viewer.assets 'unsafe-inline'; img-src https://viewer.assets https://viewer.doc data:;">
 <title>Markdown Viewer</title>
 <base href="https://viewer.doc/">
 <link id="css-md-light" rel="stylesheet" href="https://viewer.assets/vendor/github-markdown-light.min.css" media="(prefers-color-scheme: light)">
@@ -25,6 +30,7 @@
 <script src="https://viewer.assets/vendor/markdown-it-task-lists.min.js"></script>
 <script src="https://viewer.assets/vendor/markdown-it-anchor.min.js"></script>
 <script src="https://viewer.assets/vendor/highlight.min.js"></script>
+<script src="https://viewer.assets/vendor/mermaid.min.js"></script>
 <script src="https://viewer.assets/app.js"></script>
 </body>
 </html>

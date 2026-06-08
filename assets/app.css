@@ -66,6 +66,17 @@ html, body {
   font-size: 85%;
 }
 
+/* ----- mermaid diagrams (```mermaid fenced blocks, rendered by app.js) ----- */
+.mermaid {
+  margin: 16px 0;
+  text-align: center;          /* center the SVG within the content column */
+  overflow-x: auto;            /* wide diagrams scroll instead of clipping */
+}
+.mermaid svg { max-width: 100%; height: auto; }
+/* a block whose source failed to parse keeps its <pre> but is flagged */
+.mermaid-error { outline: 1px solid #cf222e; }
+:root[data-theme="dark"] .mermaid-error { outline-color: #f85149; }
+
 /* ----- settings panel (Tools > Settings...) ----- */
 :root {
   --panel-bg: #ffffff;

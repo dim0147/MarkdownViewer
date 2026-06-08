@@ -19,6 +19,7 @@ installer (`installer/`) wraps the exe for end users — see "Installer" below.
 | Web engine | **WebView2** (Edge/Chromium, evergreen) | modern CSS/JS; runtime preinstalled on Win 10/11 |
 | Markdown parser | **markdown-it 14** (+ `task-lists`, `anchor` plugins) | CommonMark + GFM, same parser VS Code uses |
 | Syntax highlighting | **highlight.js 11** (common-languages build) | zero config, fenced-block `language-x` classes |
+| Diagrams | **mermaid 11** (`securityLevel:'strict'`) | renders ` ```mermaid ` fences to SVG; theme follows app theme |
 | Styling | **github-markdown-css 5** (light + dark) | authentic GitHub look, auto dark mode |
 | WebView2 SDK | nuget `Microsoft.Web.WebView2` (pinned in `tools/get_webview2.ps1`) | headers + `WebView2LoaderStatic.lib` |
 
@@ -123,11 +124,16 @@ Two distinct things, don't mix them up:
 - `markdown-it` runs with **`html: false`** — raw HTML in documents is escaped,
   so documents cannot inject script. If you ever enable `html: true`, you MUST
   add a sanitizer (e.g. DOMPurify) in front of `innerHTML`.
-- `index.html` carries a **CSP meta tag** (`default-src 'none'`; scripts/styles
-  only from `viewer.assets`, images from the two virtual hosts + `data:`) as a
-  second layer behind `html: false`; it also blocks remote-image tracking
-  pixels. Adding a vendor lib or asset host means extending the CSP, never
-  removing it.
+- `index.html` carries a **CSP meta tag** (`default-src 'none'`; scripts only
+  from `viewer.assets`, styles from `viewer.assets` + `'unsafe-inline'`, images
+  from the two virtual hosts + `data:`) as a second layer behind `html: false`;
+  it also blocks remote-image tracking pixels. Adding a vendor lib or asset host
+  means extending the CSP, never removing it. `style-src` carries
+  `'unsafe-inline'` solely because **mermaid** injects `<style>` into the SVGs it
+  generates; `script-src` stays locked to `viewer.assets` (the part that blocks
+  injected JS). Mermaid renders document-supplied diagram source, so it runs at
+  `securityLevel:'strict'` (labels sanitized, click/script directives disabled)
+  — do not lower that level.
 - The navigation allow-list in `HandleNavigation` keeps arbitrary web content
   out of the (privileged-feeling) app window.
 - `put_AreHostObjectsAllowed(FALSE)`; the only host↔web channel is JSON
