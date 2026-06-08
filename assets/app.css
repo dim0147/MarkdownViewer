@@ -65,3 +65,95 @@ html, body {
   font-family: Consolas, monospace;
   font-size: 85%;
 }
+
+/* ----- settings panel (Tools > Settings...) ----- */
+:root {
+  --panel-bg: #ffffff;
+  --panel-fg: #1f2328;
+  --accent: #0969da;
+  --field-bg: #f6f8fa;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --panel-bg: #161b22; --panel-fg: #e6edf3; --accent: #4493f8; --field-bg: #0d1117; }
+}
+:root[data-theme="light"] { --panel-bg: #ffffff; --panel-fg: #1f2328; --accent: #0969da; --field-bg: #f6f8fa; }
+:root[data-theme="dark"]  { --panel-bg: #161b22; --panel-fg: #e6edf3; --accent: #4493f8; --field-bg: #0d1117; }
+
+.mv-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, .45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.mv-overlay[hidden] { display: none; }
+
+.mv-panel {
+  width: min(440px, calc(100vw - 48px));
+  max-height: calc(100vh - 64px);
+  overflow: auto;
+  background: var(--panel-bg);
+  color: var(--panel-fg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, .3);
+  padding: 22px 24px 18px;
+  font: 14px -apple-system, "Segoe UI", system-ui, sans-serif;
+}
+.mv-title { margin: 0 0 16px; font-size: 18px; font-weight: 600; }
+
+.mv-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.mv-row-toggle {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+.mv-label { font-weight: 500; }
+
+.mv-select {
+  appearance: auto;
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--field-bg);
+  color: inherit;
+  font: inherit;
+}
+
+.mv-slider { display: flex; align-items: center; gap: 12px; }
+.mv-range { flex: 1; accent-color: var(--accent); }
+.mv-value {
+  min-width: 78px;
+  text-align: right;
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.mv-check { width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; }
+
+.mv-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+.mv-spacer { flex: 1; }
+.mv-btn {
+  padding: 7px 14px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--field-bg);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.mv-btn:hover { border-color: var(--accent); }
+.mv-btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.mv-btn-primary:hover { filter: brightness(1.08); }

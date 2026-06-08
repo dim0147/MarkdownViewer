@@ -55,6 +55,7 @@ public:
     // All callbacks are invoked on the UI thread.
     std::function<void()>                    onReady;      // app.js loaded and said "ready"
     std::function<void(const std::wstring&)> onOpenFile;   // user activated a link to a markdown file
+    std::function<void(const std::wstring&)> onSaveConfig; // settings panel asked to persist config.json
     std::function<void(const std::wstring&)> onFailed;     // creation failed (message for the user)
 
     // Begin async creation. The control appears in `hwnd`'s client area.
@@ -192,15 +193,19 @@ private:
 
         EventRegistrationToken tok;
 
-        // app.js posts the string "ready" once it has loaded.
+        // String messages from app.js:
+        //   "ready"        - the renderer has loaded and is listening
+        //   "save:<json>"  - the settings panel wants <json> written to config.json
         using MsgHandler = ComHandler<ICoreWebView2WebMessageReceivedEventHandler,
                                       ICoreWebView2*, ICoreWebView2WebMessageReceivedEventArgs*>;
         m_webview->add_WebMessageReceived(
             new MsgHandler([this](ICoreWebView2*, ICoreWebView2WebMessageReceivedEventArgs* args) -> HRESULT {
                 LPWSTR msg = nullptr;
                 if (SUCCEEDED(args->TryGetWebMessageAsString(&msg)) && msg) {
-                    if (lstrcmpW(msg, L"ready") == 0 && onReady) onReady();
+                    std::wstring s = msg;
                     CoTaskMemFree(msg);
+                    if (s == L"ready") { if (onReady) onReady(); }
+                    else if (s.rfind(L"save:", 0) == 0) { if (onSaveConfig) onSaveConfig(s.substr(5)); }
                 }
                 return S_OK;
             }), &tok);

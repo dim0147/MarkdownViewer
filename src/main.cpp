@@ -23,11 +23,14 @@
 #pragma comment(lib, "version.lib")              // used by WebView2LoaderStatic
 #pragma comment(lib, "WebView2LoaderStatic.lib")
 
-static App g_app;
+static App   g_app;
+static HMENU g_recentMenu = nullptr;   // File > Open Recent popup (populated by App)
 
 static HMENU build_menu() {
+    g_recentMenu = CreatePopupMenu();
     HMENU file = CreatePopupMenu();
     AppendMenuW(file, MF_STRING, cfg::ID_OPEN, L"&Open...\tCtrl+O");
+    AppendMenuW(file, MF_POPUP, (UINT_PTR)g_recentMenu, L"Open &Recent");
     AppendMenuW(file, MF_STRING, cfg::ID_RELOAD, L"&Reload\tF5");
     AppendMenuW(file, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(file, MF_STRING, cfg::ID_EXIT, L"E&xit");
@@ -35,7 +38,8 @@ static HMENU build_menu() {
     AppendMenuW(tools, MF_STRING, cfg::ID_INSTALL, L"&Add to Explorer right-click menu");
     AppendMenuW(tools, MF_STRING, cfg::ID_UNINSTALL, L"&Remove from Explorer right-click menu");
     AppendMenuW(tools, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(tools, MF_STRING, cfg::ID_OPENCONFIG, L"&Settings (config.json)");
+    AppendMenuW(tools, MF_STRING, cfg::ID_SETTINGS, L"&Settings...");
+    AppendMenuW(tools, MF_STRING, cfg::ID_OPENCONFIG, L"Edit config.json in &editor");
     HMENU help = CreatePopupMenu();
     AppendMenuW(help, MF_STRING, cfg::ID_ABOUT, L"&About");
     HMENU bar = CreateMenu();
@@ -85,7 +89,9 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         case cfg::ID_EXIT:       DestroyWindow(hwnd); return 0;
         case cfg::ID_INSTALL:    reg::install_context_menu(hwnd, false); return 0;
         case cfg::ID_UNINSTALL:  reg::uninstall_context_menu(hwnd, false); return 0;
+        case cfg::ID_SETTINGS:   g_app.OpenSettings(); return 0;
         case cfg::ID_OPENCONFIG: g_app.OpenConfigFile(); return 0;
+        case cfg::ID_RECENT_CLEAR: g_app.ClearRecent(); return 0;
         case cfg::ID_ABOUT:
             MessageBoxW(hwnd,
                         (std::wstring(L"Markdown Viewer ") + cfg::kAppVersion + L"\n\n"
@@ -97,6 +103,12 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                         L"\x2022 Tools > Settings to customize theme, fonts, ...").c_str(),
                         cfg::kAppTitle, MB_OK | MB_ICONINFORMATION);
             return 0;
+        default:
+            if (LOWORD(wp) >= cfg::ID_RECENT_BASE &&
+                LOWORD(wp) <  cfg::ID_RECENT_BASE + cfg::kMaxRecent) {
+                g_app.OpenRecent(LOWORD(wp) - cfg::ID_RECENT_BASE);
+                return 0;
+            }
         }
         break;
 
@@ -137,6 +149,8 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmdShow) {
     if (!hwnd) return 1;
     ShowWindow(hwnd, nCmdShow);
     UpdateWindow(hwnd);
+
+    g_app.SetRecentMenu(g_recentMenu);   // populate File > Open Recent
 
     if (argc > 1 && GetFileAttributesW(argv[1]) != INVALID_FILE_ATTRIBUTES)
         g_app.OpenFile(argv[1]);     // queued until the renderer reports ready

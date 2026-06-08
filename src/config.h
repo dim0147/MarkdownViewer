@@ -30,6 +30,10 @@ constexpr int kDefaultWindowH = 800;
 constexpr int kMinWindowW     = 480;
 constexpr int kMinWindowH     = 360;
 
+// Most-recently-used file list (File > Open Recent), persisted to
+// %APPDATA%\MarkdownViewer\recent.txt.
+constexpr int kMaxRecent = 10;
+
 // Menu / accelerator command IDs.
 enum : UINT {
     ID_OPEN        = 101,
@@ -38,7 +42,12 @@ enum : UINT {
     ID_INSTALL     = 201,
     ID_UNINSTALL   = 202,
     ID_OPENCONFIG  = 203,
+    ID_SETTINGS    = 204,
     ID_ABOUT       = 301,
+    // Dynamic File > Open Recent entries occupy [ID_RECENT_BASE,
+    // ID_RECENT_BASE + kMaxRecent). Keep ID_RECENT_CLEAR clear of that range.
+    ID_RECENT_BASE  = 600,
+    ID_RECENT_CLEAR = 700,
 };
 
 } // namespace cfg
