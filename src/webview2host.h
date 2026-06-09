@@ -15,6 +15,7 @@
 
 #include <windows.h>
 #include <shellapi.h>
+#include <ole2.h>
 #include <string>
 #include <functional>
 #include <WebView2.h>
@@ -48,6 +49,80 @@ public:
         return r;
     }
     STDMETHODIMP Invoke(TArg1 a, TArg2 b) override { return m_fn(a, b); }
+};
+
+// ---------------------------------------------------------------------------
+// FileDropTarget - an OLE drop target that accepts external file drops
+// (CF_HDROP) and hands the first dropped path to a callback.
+//
+// Why this exists: with put_AllowExternalDrop(FALSE) the WebView2 runtime
+// registers its OWN drop target on its inner render window that *rejects*
+// external drops (the "no-drop" cursor) - it does NOT let the drop fall
+// through to the host frame's WM_DROPFILES. So WebViewHost revokes that target
+// and registers this one across the WebView2 child windows, restoring "drop a
+// .md file anywhere on the page to open it". Self-deletes on final Release.
+// ---------------------------------------------------------------------------
+class FileDropTarget : public IDropTarget {
+    LONG m_ref = 1;
+    bool m_hasFiles = false;
+    std::function<void(const std::wstring&)> m_onDrop;
+
+    static bool data_has_files(IDataObject* data) {
+        FORMATETC fmt = { CF_HDROP, nullptr, DVASPECT_CONTENT, -1, TYMED_HGLOBAL };
+        return data && data->QueryGetData(&fmt) == S_OK;
+    }
+    static std::wstring first_file(IDataObject* data) {
+        std::wstring out;
+        FORMATETC fmt = { CF_HDROP, nullptr, DVASPECT_CONTENT, -1, TYMED_HGLOBAL };
+        STGMEDIUM stg = {};
+        if (data && SUCCEEDED(data->GetData(&fmt, &stg))) {
+            if (HDROP drop = (HDROP)GlobalLock(stg.hGlobal)) {
+                wchar_t path[2048] = L"";
+                if (DragQueryFileW(drop, 0, path, 2047)) out = path;
+                GlobalUnlock(stg.hGlobal);
+            }
+            ReleaseStgMedium(&stg);
+        }
+        return out;
+    }
+public:
+    explicit FileDropTarget(std::function<void(const std::wstring&)> onDrop)
+        : m_onDrop(std::move(onDrop)) {}
+
+    STDMETHODIMP QueryInterface(REFIID riid, void** ppv) override {
+        if (!ppv) return E_POINTER;
+        if (riid == IID_IUnknown || riid == IID_IDropTarget) {
+            *ppv = static_cast<IDropTarget*>(this);
+            AddRef();
+            return S_OK;
+        }
+        *ppv = nullptr;
+        return E_NOINTERFACE;
+    }
+    STDMETHODIMP_(ULONG) AddRef() override { return InterlockedIncrement(&m_ref); }
+    STDMETHODIMP_(ULONG) Release() override {
+        LONG r = InterlockedDecrement(&m_ref);
+        if (!r) delete this;
+        return r;
+    }
+
+    STDMETHODIMP DragEnter(IDataObject* data, DWORD, POINTL, DWORD* effect) override {
+        m_hasFiles = data_has_files(data);
+        *effect = m_hasFiles ? DROPEFFECT_COPY : DROPEFFECT_NONE;
+        return S_OK;
+    }
+    STDMETHODIMP DragOver(DWORD, POINTL, DWORD* effect) override {
+        *effect = m_hasFiles ? DROPEFFECT_COPY : DROPEFFECT_NONE;
+        return S_OK;
+    }
+    STDMETHODIMP DragLeave() override { m_hasFiles = false; return S_OK; }
+    STDMETHODIMP Drop(IDataObject* data, DWORD, POINTL, DWORD* effect) override {
+        std::wstring path = first_file(data);
+        *effect = path.empty() ? DROPEFFECT_NONE : DROPEFFECT_COPY;
+        m_hasFiles = false;
+        if (!path.empty() && m_onDrop) m_onDrop(path);
+        return S_OK;
+    }
 };
 
 class WebViewHost {
@@ -94,6 +169,11 @@ public:
     }
 
     void Destroy() {
+        if (m_dropTarget) {
+            revoke_drop_subtree(m_hwnd);   // release the refs RegisterDragDrop took
+            m_dropTarget->Release();
+            m_dropTarget = nullptr;
+        }
         if (m_webview3)   { m_webview3->Release();   m_webview3 = nullptr; }
         if (m_webview)    { m_webview->Release();    m_webview = nullptr; }
         if (m_controller) { m_controller->Close(); m_controller->Release(); m_controller = nullptr; }
@@ -136,11 +216,36 @@ private:
     ICoreWebView2Controller* m_controller = nullptr;
     ICoreWebView2*           m_webview    = nullptr;
     ICoreWebView2_3*         m_webview3   = nullptr;   // virtual host mapping API
+    IDropTarget*             m_dropTarget = nullptr;   // our OS file-drop handler
     std::wstring             m_assetsDir;
     std::wstring             m_docDir;
 
     void Fail(const std::wstring& msg) {
         if (onFailed) onFailed(msg);
+    }
+
+    // (Re)register our file-drop target on every window in the WebView2 child
+    // tree, replacing the runtime's rejecting target so OS drops reach us.
+    // OLE routes a drop to the exact window under the cursor (no walk-up to the
+    // parent), and which inner window that is depends on Chromium internals, so
+    // we blanket the whole subtree. Called after creation and each navigation.
+    void InstallDropTarget() {
+        if (m_dropTarget) register_drop_subtree(m_hwnd, m_dropTarget);
+    }
+    static void register_drop_subtree(HWND parent, IDropTarget* target) {
+        if (!parent) return;
+        for (HWND c = GetWindow(parent, GW_CHILD); c; c = GetWindow(c, GW_HWNDNEXT)) {
+            RevokeDragDrop(c);            // drop the runtime's own (rejecting) target
+            RegisterDragDrop(c, target);  // ours accepts external files
+            register_drop_subtree(c, target);
+        }
+    }
+    static void revoke_drop_subtree(HWND parent) {
+        if (!parent) return;
+        for (HWND c = GetWindow(parent, GW_CHILD); c; c = GetWindow(c, GW_HWNDNEXT)) {
+            RevokeDragDrop(c);
+            revoke_drop_subtree(c);
+        }
     }
 
     static bool starts_with(const std::wstring& s, const wchar_t* prefix) {
@@ -186,12 +291,18 @@ private:
                 cfg::kAssetsHost, m_assetsDir.c_str(),
                 COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_DENY_CORS);
 
-        // Let WM_DROPFILES reach the main window instead of the webview.
+        // Stop the webview from handling external drops as web content; we want
+        // dropped .md files to open in the viewer, not navigate the page. This
+        // makes the runtime register a drop target that *rejects* OS drops, so
+        // we replace it below with our own (see InstallDropTarget / FileDropTarget).
         ICoreWebView2Controller4* c4 = nullptr;
         if (SUCCEEDED(m_controller->QueryInterface(IID_PPV_ARGS(&c4))) && c4) {
             c4->put_AllowExternalDrop(FALSE);
             c4->Release();
         }
+        if (!m_dropTarget)
+            m_dropTarget = new FileDropTarget([this](const std::wstring& p) { if (onOpenFile) onOpenFile(p); });
+        InstallDropTarget();
 
         EventRegistrationToken tok;
 
@@ -223,6 +334,16 @@ private:
                 LPWSTR uri = nullptr;
                 args->get_Uri(&uri);
                 if (!HandleNavigation(take(uri))) args->put_Cancel(TRUE);
+                return S_OK;
+            }), &tok);
+
+        // The inner render window that owns the OS drop target is (re)created on
+        // every navigation, so re-apply our file-drop target once it settles.
+        using NavDoneHandler = ComHandler<ICoreWebView2NavigationCompletedEventHandler,
+                                          ICoreWebView2*, ICoreWebView2NavigationCompletedEventArgs*>;
+        m_webview->add_NavigationCompleted(
+            new NavDoneHandler([this](ICoreWebView2*, ICoreWebView2NavigationCompletedEventArgs*) -> HRESULT {
+                InstallDropTarget();
                 return S_OK;
             }), &tok);
 

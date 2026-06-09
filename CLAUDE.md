@@ -110,8 +110,17 @@ Key points:
 - **Keyboard**: the webview owns focus, so `Ctrl+O`/`F5` are caught in
   `add_AcceleratorKeyPressed` and posted to the main window as `WM_COMMAND`.
   The `HACCEL` table in main.cpp only covers the rare main-window-focused case.
-- **Drag & drop**: `put_AllowExternalDrop(FALSE)` on the controller makes
-  drops fall through to the main window's `WM_DROPFILES`.
+- **Drag & drop**: `put_AllowExternalDrop(FALSE)` stops the webview from
+  handling OS drops as web content — but the runtime then registers its own
+  drop target on the inner render window that *rejects* external drops (it does
+  **not** fall through to `WM_DROPFILES`; relying on that broke when the
+  evergreen runtime changed). So `WebViewHost` registers its own `FileDropTarget`
+  (an `IDropTarget`) across the whole WebView2 child-window subtree, re-applied
+  on every `NavigationCompleted` because the render window is recreated on
+  navigation. A dropped file's first path is passed to `onOpenFile` → `OpenFile`.
+  The main window's `WM_DROPFILES` (`DragAcceptFiles`) is kept as a fallback for
+  drops on the menu/title chrome. OLE routes a drop to the exact window under the
+  cursor (no walk-up to the parent), which is why the subtree is blanketed.
 - **F5 (Reload)** re-reads `config.json` *and* the document — settings edits
   apply without restarting.
 
