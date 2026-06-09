@@ -99,6 +99,14 @@ Key points:
   **ignored** (the viewer never launches or reveals files on disk); web links
   (http/https/mailto) are cancelled and handed to the default browser.
   In-page `#anchor` clicks never navigate — app.js intercepts and scrolls.
+- **Back/forward history** lives in `App` (`m_history` + `m_historyIndex`):
+  every `OpenFile` (link click, drop, dialog, recent, command line) pushes an
+  entry, browser-style (a new open discards forward entries). `GoBack`/`GoForward`
+  (the floating toolbar in `index.html`, or `Alt+←`/`Alt+→` handled in app.js)
+  re-`Show` a remembered path; `SendNavState` posts a `{type:"nav"}` message so
+  the renderer can enable/disable the buttons. The renderer keys per-document
+  **scroll memory** off the `path` field in the `render` message (file names
+  alone collide across folders).
 - **Keyboard**: the webview owns focus, so `Ctrl+O`/`F5` are caught in
   `add_AcceleratorKeyPressed` and posted to the main window as `WM_COMMAND`.
   The `HACCEL` table in main.cpp only covers the rare main-window-focused case.

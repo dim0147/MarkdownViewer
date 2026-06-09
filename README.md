@@ -62,6 +62,9 @@ portable.
 - `F5` reloads the file *and* your settings (handy while editing)
 - Clicking a relative `.md` link opens it in the viewer; external links open
   in your default browser
+- **Back / Forward navigation** — a floating toolbar (or `Alt+←` / `Alt+→`)
+  retraces the `.md` links you followed, restoring your scroll position in
+  each document
 - **Safe by design** — raw HTML in documents is escaped (backed by a strict
   CSP), document links can't escape the document's folder, and the viewer
   never launches other local files

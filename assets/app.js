@@ -20,8 +20,13 @@
   let cfg = { ...DEFAULTS };    // the persisted/applied config
   let md = null;
   let currentName = '';
+  let currentPath = '';         // host's stable key for the open doc (scroll memory)
   let currentText = '';         // last rendered source, for live re-render
   const content = document.getElementById('content');
+
+  // Per-document scroll memory, keyed by the path the host sends. Updated when
+  // we leave a doc (navigate away) so Back/Forward returns to where you were.
+  const scrollPos = new Map();
 
   // Build the markdown-it parser from a config object.
   function buildParser(c) {
@@ -132,10 +137,15 @@
     // and reload, so no explicit rerender() is needed here.
   }
 
-  function render(text, name) {
-    const sameDoc = name === currentName;
-    const scroll = sameDoc ? window.scrollY : 0;   // keep position on F5
+  function render(text, name, path) {
+    path = path || '';
+    const samePath = path !== '' && path === currentPath;
+    // Remember where we were in the doc we're leaving, so Back/Forward to it
+    // restores the position. On F5 (same doc) keep the current scroll instead.
+    if (currentPath && !samePath) scrollPos.set(currentPath, window.scrollY);
+    const scroll = samePath ? window.scrollY : (scrollPos.get(path) || 0);
     currentName = name;
+    currentPath = path;
     currentText = text || '';
     content.innerHTML = md.render(currentText);
     window.scrollTo(0, scroll);
@@ -144,6 +154,7 @@
 
   function showWelcome() {
     currentName = '';
+    currentPath = '';
     currentText = '';
     content.innerHTML = `
       <div class="welcome">
@@ -301,6 +312,31 @@
     return b;
   }
 
+  // ---- back/forward history toolbar ----------------------------------------
+  // The host owns the history (it reads the files); these buttons just ask it
+  // to navigate, and applyNavState() reflects what the host says is possible.
+  const navBar = document.getElementById('mv-nav');
+  const navBack = document.getElementById('mv-back');
+  const navFwd = document.getElementById('mv-fwd');
+  navBack.addEventListener('click', () => window.chrome.webview.postMessage('back'));
+  navFwd.addEventListener('click', () => window.chrome.webview.postMessage('forward'));
+
+  function applyNavState(canBack, canForward) {
+    navBack.disabled = !canBack;
+    navFwd.disabled = !canForward;
+    navBar.hidden = !(canBack || canForward);   // stay out of the way with no history
+  }
+
+  // Alt+Left / Alt+Right mirror the toolbar (and a browser's muscle memory).
+  document.addEventListener('keydown', (e) => {
+    if (!e.altKey || e.ctrlKey || e.shiftKey || e.metaKey) return;
+    if (e.key === 'ArrowLeft' && !navBack.disabled) {
+      e.preventDefault(); window.chrome.webview.postMessage('back');
+    } else if (e.key === 'ArrowRight' && !navFwd.disabled) {
+      e.preventDefault(); window.chrome.webview.postMessage('forward');
+    }
+  });
+
   // In-page anchor links: <base href="https://viewer.doc/"> would turn "#foo"
   // into a navigation (which the host cancels), so scroll manually instead.
   document.addEventListener('click', (e) => {
@@ -319,9 +355,10 @@
     if (!m || typeof m !== 'object') return;
     switch (m.type) {
       case 'config':   applyConfig(m.config); break;
-      case 'render':   render(m.markdown, m.name); break;
+      case 'render':   render(m.markdown, m.name, m.path); break;
       case 'welcome':  showWelcome(); break;
       case 'settings': settings.open(); break;
+      case 'nav':      applyNavState(m.canBack, m.canForward); break;
     }
   });
 

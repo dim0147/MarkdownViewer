@@ -4,11 +4,13 @@
 // JSON messages:
 //
 //   { type: "config",  config: "<raw config.json text>" }
-//   { type: "render",  name: "file.md", markdown: "<source text>" }
+//   { type: "render",  name: "file.md", path: "<full path>", markdown: "<source>" }
 //   { type: "welcome" }
+//   { type: "nav",     canBack: <bool>, canForward: <bool> }
 //
-// app.js answers with the string "ready" once loaded; any file opened before
-// that is queued in m_current and rendered from OnWebReady().
+// app.js answers with the string "ready" once loaded (and "back"/"forward" from
+// the history toolbar); any file opened before "ready" is queued in m_current
+// and rendered from OnWebReady().
 
 #include <windows.h>
 #include <commdlg.h>
@@ -36,6 +38,8 @@ public:
         m_web.onReady      = [this]() { OnWebReady(); };
         m_web.onOpenFile   = [this](const std::wstring& path) { OpenFile(path); };
         m_web.onSaveConfig = [this](const std::wstring& json) { OnSaveConfig(json); };
+        m_web.onBack       = [this]() { GoBack(); };
+        m_web.onForward    = [this]() { GoForward(); };
         m_web.onFailed     = [this](const std::wstring& msg) {
             MessageBoxW(m_hwnd, msg.c_str(), cfg::kAppTitle, MB_OK | MB_ICONERROR);
         };
@@ -48,14 +52,26 @@ public:
     void Focus()     { m_web.Focus(); }
     void Moved()     { m_web.NotifyMoved(); }
 
+    // Open a file as a *fresh* navigation: it joins the MRU list and is pushed
+    // onto the back/forward history (any forward entries are discarded, like a
+    // web browser). Reached from the command line, drag & drop, File > Open,
+    // Open Recent, and clicks on in-document .md links.
     void OpenFile(const std::wstring& path) {
-        m_current = path;
-        std::wstring dir, name;
-        fileio::split_path(path, dir, name);
-        SetWindowTextW(m_hwnd, (name + L" - " + cfg::kAppTitle).c_str());
         recent::add(path);
         RefreshRecentMenu();
-        if (m_ready) SendRender();
+        PushHistory(path);
+        Show(path);
+    }
+
+    // Alt+Left / the toolbar's Back button: revisit the previous document.
+    void GoBack() {
+        if (m_historyIndex > 0) { --m_historyIndex; Show(m_history[m_historyIndex]); }
+    }
+
+    // Alt+Right / the toolbar's Forward button: revisit a document we came back
+    // from.
+    void GoForward() {
+        if (m_historyIndex + 1 < (int)m_history.size()) { ++m_historyIndex; Show(m_history[m_historyIndex]); }
     }
 
     // The File > Open Recent submenu (owned by main.cpp). Rebuilt whenever the
@@ -183,6 +199,34 @@ private:
     std::wstring m_current;        // currently displayed file (empty = welcome)
     bool         m_ready = false;  // app.js is loaded and listening
 
+    // Back/forward history: visited file paths oldest->newest, with m_historyIndex
+    // pointing at the current document. Opening a file truncates any forward
+    // entries (browser semantics); the renderer's scroll memory is keyed off the
+    // path we send, so Back/Forward restores where the user was in each doc.
+    std::vector<std::wstring> m_history;
+    int                       m_historyIndex = -1;
+
+    // Append `path` as the new current document, dropping any forward history.
+    // A no-op when it equals the current entry (e.g. Open Recent on the open
+    // file) so we never stack duplicates.
+    void PushHistory(const std::wstring& path) {
+        if (m_historyIndex >= 0 && m_history[m_historyIndex] == path) return;
+        if (m_historyIndex + 1 < (int)m_history.size())
+            m_history.erase(m_history.begin() + m_historyIndex + 1, m_history.end());
+        m_history.push_back(path);
+        m_historyIndex = (int)m_history.size() - 1;
+    }
+
+    // Display `path` (already in m_history): update window title and, once the
+    // renderer is up, push the document and the back/forward button state.
+    void Show(const std::wstring& path) {
+        m_current = path;
+        std::wstring dir, name;
+        fileio::split_path(path, dir, name);
+        SetWindowTextW(m_hwnd, (name + L" - " + cfg::kAppTitle).c_str());
+        if (m_ready) { SendRender(); SendNavState(); }
+    }
+
     // Build a menu label for the i-th recent file: an "&1".."&9","&0" mnemonic
     // plus a path compacted to fit, with literal '&' doubled so it shows.
     static std::wstring RecentLabel(int i, const std::wstring& path) {
@@ -209,6 +253,18 @@ private:
         SendConfig();
         if (!m_current.empty()) SendRender();
         else                    SendWelcome();
+        SendNavState();            // restore the toolbar after a page (re)load
+    }
+
+    // Tell the renderer whether Back/Forward are currently possible so it can
+    // enable/disable (and show/hide) the history toolbar.
+    void SendNavState() {
+        bool back = m_historyIndex > 0;
+        bool fwd  = m_historyIndex + 1 < (int)m_history.size();
+        std::string json = std::string("{\"type\":\"nav\",\"canBack\":") +
+                           (back ? "true" : "false") + ",\"canForward\":" +
+                           (fwd ? "true" : "false") + "}";
+        m_web.PostJson(fileio::widen(json));
     }
 
     void SendConfig() {
@@ -231,8 +287,11 @@ private:
         std::wstring dir, name;
         fileio::split_path(m_current, dir, name);
         m_web.SetDocDir(dir);
+        // `path` is the renderer's stable key for per-document scroll memory
+        // (file names alone collide across folders); `name` is the display title.
         std::string json = "{\"type\":\"render\",\"name\":\"" +
                            fileio::json_escape(fileio::narrow(name)) +
+                           "\",\"path\":\"" + fileio::json_escape(fileio::narrow(m_current)) +
                            "\",\"markdown\":\"" + fileio::json_escape(text) + "\"}";
         m_web.PostJson(fileio::widen(json));
     }

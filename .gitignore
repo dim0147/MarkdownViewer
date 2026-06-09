@@ -435,4 +435,5 @@ res/app.res
 src/*.obj
 installer/output/
 /MarkdownViewer.exe
+/MarkdownViewer-Portable-*.zip
 .claude/settings.local.json
