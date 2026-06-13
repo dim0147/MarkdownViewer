@@ -116,6 +116,14 @@ html, body {
 .mermaid-error { outline: 1px solid #cf222e; }
 :root[data-theme="dark"] .mermaid-error { outline-color: #f85149; }
 
+/* ----- KaTeX math (```math fenced blocks, rendered by app.js renderMath) ----- */
+/* KaTeX centers display math itself (.katex-display); we just add vertical
+   spacing and let very wide equations scroll instead of clipping. */
+.math-block { margin: 16px 0; overflow-x: auto; }
+/* a fence whose LaTeX failed to parse keeps its <pre> source but is flagged */
+.math-error { outline: 1px solid #cf222e; }
+:root[data-theme="dark"] .math-error { outline-color: #f85149; }
+
 /* ----- settings panel (Tools > Settings...) ----- */
 :root {
   --panel-bg: #ffffff;

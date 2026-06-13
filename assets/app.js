@@ -2,8 +2,11 @@
 // (see src/app.h for the protocol) and renders markdown with markdown-it
 // (+ task lists, heading anchors) and highlight.js.
 //
-// Security: markdown-it runs with html:false, so raw HTML in documents is
-// escaped and shown literally - no script can be injected by a document.
+// Security: markdown-it runs with html:true (raw HTML in documents is parsed,
+// so <details>/<summary>/<kbd>/<sub>/<sup> etc. work GitHub-style), and every
+// rendered document HTML string is sanitized by DOMPurify (window.DOMPurify)
+// before it touches innerHTML - scripts, event handlers and javascript: URLs
+// are stripped. All document-HTML insertion goes through renderToContent().
 (() => {
   'use strict';
 
@@ -15,7 +18,18 @@
     syntaxHighlight: true,
     linkify: true,
     typographer: false,
+    math: true,             // render $...$ / $$...$$ / ```math with KaTeX
   };
+
+  // DOMPurify options for sanitizing rendered document HTML. Empty = use
+  // DOMPurify's defaults, which already allow exactly what we need and strip
+  // exactly what we don't: details/summary (+ the `open` attr), task-list
+  // <input type=checkbox disabled>, <a href>/id, headings/anchors, and the full
+  // HTML+SVG+MathML profile (so KaTeX's <math>/<semantics>/<mrow>/<annotation>
+  // and its <span class style> output survive). It strips <script>, on* event
+  // handlers and javascript:/data:script URLs. We never RESTRICT below default
+  // (that would drop MathML/details/inputs) - only the default profile is used.
+  const SANITIZE_OPTS = {};
 
   let cfg = { ...DEFAULTS };    // the persisted/applied config
   let md = null;
@@ -31,7 +45,7 @@
   // Build the markdown-it parser from a config object.
   function buildParser(c) {
     md = window.markdownit({
-      html: false,                 // keep disabled: raw HTML is escaped (see header note)
+      html: true,                  // raw HTML allowed; DOMPurify sanitizes the output (renderToContent)
       linkify: !!c.linkify,
       typographer: !!c.typographer,
       highlight: (code, lang) => {
@@ -43,6 +57,16 @@
     })
       .use(window.markdownitTaskLists, { label: false })
       .use(window.markdownItAnchor, { tabIndex: false });
+
+    // Math: texmath turns $...$ / $$...$$ into KaTeX HTML at parse time, using
+    // KaTeX as its engine. Only wire it when enabled and both libs are present.
+    if (c.math && window.texmath && window.katex) {
+      md.use(window.texmath, {
+        engine: window.katex,
+        delimiters: 'dollars',
+        katexOptions: { throwOnError: false },
+      });
+    }
   }
 
   // Apply the page chrome (theme + layout) from a config object.
@@ -108,13 +132,52 @@
     }
   }
 
+  // ---- KaTeX math fences ---------------------------------------------------
+  // Inline $...$ and $$...$$ are handled by texmath at parse time. This handles
+  // the ```math / ```latex fenced blocks, which survive markdown-it as
+  // <pre><code class="language-math|language-latex"> (highlight.js has no such
+  // grammar). Each becomes a div rendered by KaTeX in display mode. On a parse
+  // error we leave the source visible and flag it (mirrors the mermaid-error
+  // pattern). Only runs when math is on and KaTeX is loaded.
+  function renderMath() {
+    if (!cfg.math || !window.katex) return;
+    for (const code of content.querySelectorAll(
+        'pre > code.language-math, pre > code.language-latex')) {
+      const pre = code.parentElement;
+      const src = code.textContent;
+      try {
+        const html = window.katex.renderToString(src, {
+          displayMode: true,
+          throwOnError: false,
+        });
+        const fig = document.createElement('div');
+        fig.className = 'math-block';
+        fig.innerHTML = html;                  // trusted: KaTeX output
+        pre.replaceWith(fig);
+      } catch (err) {
+        pre.classList.add('math-error');       // leave source visible on error
+        pre.title = String((err && err.message) || err);
+      }
+    }
+  }
+
+  // The single sanitizing sink for document HTML. markdown-it renders (html:true
+  // means raw document HTML is parsed), then DOMPurify strips anything dangerous
+  // before it reaches the DOM. Every document-HTML innerHTML assignment must go
+  // through here. renderMermaid()/renderMath() run AFTER, on the sanitized DOM.
+  function renderToContent(text) {
+    const dirty = md.render(text || '');
+    content.innerHTML = window.DOMPurify ? window.DOMPurify.sanitize(dirty, SANITIZE_OPTS) : dirty;
+  }
+
   // Re-render the current document with the current parser (keeps scroll).
   function rerender() {
     if (!currentName) return;
     const scroll = window.scrollY;
-    content.innerHTML = md.render(currentText || '');
+    renderToContent(currentText);
     window.scrollTo(0, scroll);
     renderMermaid();
+    renderMath();
   }
 
   // Adopt a config object: style + parser + (if a doc is open) re-render.
@@ -147,9 +210,10 @@
     currentName = name;
     currentPath = path;
     currentText = text || '';
-    content.innerHTML = md.render(currentText);
+    renderToContent(currentText);
     window.scrollTo(0, scroll);
     renderMermaid();
+    renderMath();
   }
 
   function showWelcome() {
@@ -187,6 +251,7 @@
       const syntax = toggle(panel, 'Syntax highlighting');
       const linkify = toggle(panel, 'Auto-link bare URLs');
       const typo = toggle(panel, 'Smart typography (quotes, dashes)');
+      const math = toggle(panel, 'Math (KaTeX)');
 
       const footer = el('div', 'mv-footer');
       const reset = button(footer, 'Reset to defaults', 'mv-btn');
@@ -213,13 +278,14 @@
       syntax.input.addEventListener('change', () => { draft.syntaxHighlight = syntax.input.checked; live(); });
       linkify.input.addEventListener('change', () => { draft.linkify = linkify.input.checked; live(); });
       typo.input.addEventListener('change', () => { draft.typographer = typo.input.checked; live(); });
+      math.input.addEventListener('change', () => { draft.math = math.input.checked; live(); });
 
       reset.addEventListener('click', () => { draft = { ...draft, ...DEFAULTS }; populate(); live(); });
       cancel.addEventListener('click', close);
       save.addEventListener('click', commit);
       overlay.addEventListener('mousedown', (e) => { if (e.target === overlay) close(); });
 
-      ui = { overlay, theme, width, font, syntax, linkify, typo };
+      ui = { overlay, theme, width, font, syntax, linkify, typo, math };
     };
 
     // Push draft values into the controls.
@@ -232,6 +298,7 @@
       ui.syntax.input.checked = !!draft.syntaxHighlight;
       ui.linkify.input.checked = !!draft.linkify;
       ui.typo.input.checked = !!draft.typographer;
+      ui.math.input.checked = !!draft.math;
     };
 
     const open = () => {

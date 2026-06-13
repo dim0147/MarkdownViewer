@@ -7,7 +7,8 @@ changing anything.
 
 A small native Windows Markdown viewer: a single portable `MarkdownViewer.exe`
 (Win32, C++17) that renders `.md` files with **markdown-it + highlight.js
-inside WebView2** (Edge/Chromium). Users open files via Explorer right-click,
+inside WebView2** (Edge/Chromium) — including mermaid diagrams, KaTeX math, and
+collapsible sections. Users open files via Explorer right-click,
 drag & drop, `Ctrl+O`, or the command line. An optional per-user Inno Setup
 installer (`installer/`) wraps the exe for end users — see "Installer" below.
 
@@ -20,6 +21,8 @@ installer (`installer/`) wraps the exe for end users — see "Installer" below.
 | Markdown parser | **markdown-it 14** (+ `task-lists`, `anchor` plugins) | CommonMark + GFM, same parser VS Code uses |
 | Syntax highlighting | **highlight.js 11** (common-languages build) | zero config, fenced-block `language-x` classes |
 | Diagrams | **mermaid 11** (`securityLevel:'strict'`) | renders ` ```mermaid ` fences to SVG; theme follows app theme |
+| Math | **KaTeX 0.16** (+ `markdown-it-texmath`) | renders `$…$` / `$$…$$` / ` ```math ` fences; fonts vendored under `assets/vendor/fonts/` |
+| Sanitizer | **DOMPurify 3** | sanitizes rendered HTML so `html:true` is safe (collapsible `<details>`, `<kbd>`, `<sub>`/`<sup>`, etc.) |
 | Styling | **github-markdown-css 5** (light + dark) | authentic GitHub look, auto dark mode |
 | WebView2 SDK | nuget `Microsoft.Web.WebView2` (pinned in `tools/get_webview2.ps1`) | headers + `WebView2LoaderStatic.lib` |
 
@@ -138,12 +141,20 @@ Two distinct things, don't mix them up:
 
 ## Security invariants (do not weaken)
 
-- `markdown-it` runs with **`html: false`** — raw HTML in documents is escaped,
-  so documents cannot inject script. If you ever enable `html: true`, you MUST
-  add a sanitizer (e.g. DOMPurify) in front of `innerHTML`.
+- `markdown-it` runs with **`html: true`** — raw HTML in documents is parsed, so
+  GitHub-style `<details>`/`<summary>`/`<kbd>`/`<sub>`/`<sup>` work — and every
+  rendered document HTML string is sanitized by **DOMPurify** (default profile)
+  before it touches `innerHTML`, stripping `<script>`, `on*` event handlers and
+  `javascript:` URLs. DOMPurify is now the **load-bearing** XSS control: it MUST
+  stay in front of every `innerHTML` assignment of document HTML — that is the
+  single `renderToContent()` helper in `app.js`, which both `render()` and
+  `rerender()` go through. Do not insert document HTML by any other path, and do
+  not pass restrictive `ALLOWED_TAGS` that would strip the default profile
+  (MathML for KaTeX, `<details>`/`<summary>`, task-list `<input>`).
 - `index.html` carries a **CSP meta tag** (`default-src 'none'`; scripts only
   from `viewer.assets`, styles from `viewer.assets` + `'unsafe-inline'`, images
-  from the two virtual hosts + `data:`) as a second layer behind `html: false`;
+  from the two virtual hosts + `data:`) as **defense-in-depth behind DOMPurify**
+  (even a sanitizer bypass could not run injected script or exfiltrate);
   it also blocks remote-image tracking pixels. Adding a vendor lib or asset host
   means extending the CSP, never removing it. `style-src` carries
   `'unsafe-inline'` solely because **mermaid** injects `<style>` into the SVGs it

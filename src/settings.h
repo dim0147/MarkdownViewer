@@ -21,7 +21,8 @@ R"({
   "fontSize": 16,
   "syntaxHighlight": true,
   "linkify": true,
-  "typographer": false
+  "typographer": false,
+  "math": true
 })";
 // theme:           "auto" follows Windows light/dark mode; or "light" / "dark"
 // maxWidth:        content column width in px (0 = full width)
@@ -29,6 +30,7 @@ R"({
 // syntaxHighlight: colorize fenced code blocks (highlight.js)
 // linkify:         turn bare URLs into links
 // typographer:     smart quotes, dashes, ellipsis
+// math:            render $...$ / $$...$$ / ```math with KaTeX
 
 inline std::wstring config_path() {
     return fileio::roaming_app_dir() + L"\\config.json";

@@ -17,10 +17,36 @@ ASSET_HLJS_CSS_LIGHT   RCDATA "..\\assets\\vendor\\hljs-github.min.css"
 ASSET_HLJS_CSS_DARK    RCDATA "..\\assets\\vendor\\hljs-github-dark.min.css"
 ASSET_GHMD_CSS_LIGHT   RCDATA "..\\assets\\vendor\\github-markdown-light.min.css"
 ASSET_GHMD_CSS_DARK    RCDATA "..\\assets\\vendor\\github-markdown-dark.min.css"
+ASSET_KATEX_CSS        RCDATA "..\\assets\\vendor\\katex.min.css"
+ASSET_KATEX_JS         RCDATA "..\\assets\\vendor\\katex.min.js"
+ASSET_MDIT_TEXMATH     RCDATA "..\\assets\\vendor\\markdown-it-texmath.min.js"
+ASSET_DOMPURIFY        RCDATA "..\\assets\\vendor\\purify.min.js"
+
+// KaTeX woff2 fonts (referenced by katex.min.css @font-face).
+ASSET_FONT_KATEX_AMS_REGULAR          RCDATA "..\\assets\\vendor\\fonts\\KaTeX_AMS-Regular.woff2"
+ASSET_FONT_KATEX_CALIGRAPHIC_BOLD     RCDATA "..\\assets\\vendor\\fonts\\KaTeX_Caligraphic-Bold.woff2"
+ASSET_FONT_KATEX_CALIGRAPHIC_REGULAR  RCDATA "..\\assets\\vendor\\fonts\\KaTeX_Caligraphic-Regular.woff2"
+ASSET_FONT_KATEX_FRAKTUR_BOLD         RCDATA "..\\assets\\vendor\\fonts\\KaTeX_Fraktur-Bold.woff2"
+ASSET_FONT_KATEX_FRAKTUR_REGULAR      RCDATA "..\\assets\\vendor\\fonts\\KaTeX_Fraktur-Regular.woff2"
+ASSET_FONT_KATEX_MAIN_BOLD            RCDATA "..\\assets\\vendor\\fonts\\KaTeX_Main-Bold.woff2"
+ASSET_FONT_KATEX_MAIN_BOLDITALIC      RCDATA "..\\assets\\vendor\\fonts\\KaTeX_Main-BoldItalic.woff2"
+ASSET_FONT_KATEX_MAIN_ITALIC          RCDATA "..\\assets\\vendor\\fonts\\KaTeX_Main-Italic.woff2"
+ASSET_FONT_KATEX_MAIN_REGULAR         RCDATA "..\\assets\\vendor\\fonts\\KaTeX_Main-Regular.woff2"
+ASSET_FONT_KATEX_MATH_BOLDITALIC      RCDATA "..\\assets\\vendor\\fonts\\KaTeX_Math-BoldItalic.woff2"
+ASSET_FONT_KATEX_MATH_ITALIC          RCDATA "..\\assets\\vendor\\fonts\\KaTeX_Math-Italic.woff2"
+ASSET_FONT_KATEX_SANSSERIF_BOLD       RCDATA "..\\assets\\vendor\\fonts\\KaTeX_SansSerif-Bold.woff2"
+ASSET_FONT_KATEX_SANSSERIF_ITALIC     RCDATA "..\\assets\\vendor\\fonts\\KaTeX_SansSerif-Italic.woff2"
+ASSET_FONT_KATEX_SANSSERIF_REGULAR    RCDATA "..\\assets\\vendor\\fonts\\KaTeX_SansSerif-Regular.woff2"
+ASSET_FONT_KATEX_SCRIPT_REGULAR       RCDATA "..\\assets\\vendor\\fonts\\KaTeX_Script-Regular.woff2"
+ASSET_FONT_KATEX_SIZE1_REGULAR        RCDATA "..\\assets\\vendor\\fonts\\KaTeX_Size1-Regular.woff2"
+ASSET_FONT_KATEX_SIZE2_REGULAR        RCDATA "..\\assets\\vendor\\fonts\\KaTeX_Size2-Regular.woff2"
+ASSET_FONT_KATEX_SIZE3_REGULAR        RCDATA "..\\assets\\vendor\\fonts\\KaTeX_Size3-Regular.woff2"
+ASSET_FONT_KATEX_SIZE4_REGULAR        RCDATA "..\\assets\\vendor\\fonts\\KaTeX_Size4-Regular.woff2"
+ASSET_FONT_KATEX_TYPEWRITER_REGULAR   RCDATA "..\\assets\\vendor\\fonts\\KaTeX_Typewriter-Regular.woff2"
 
 VS_VERSION_INFO VERSIONINFO
-FILEVERSION     2,4,1,0
-PRODUCTVERSION  2,4,1,0
+FILEVERSION     2,5,0,0
+PRODUCTVERSION  2,5,0,0
 FILEOS          VOS_NT_WINDOWS32
 FILETYPE        VFT_APP
 BEGIN
@@ -29,9 +55,9 @@ BEGIN
         BLOCK "040904b0"
         BEGIN
             VALUE "FileDescription",  "Markdown Viewer"
-            VALUE "FileVersion",      "2.4.1.0"
+            VALUE "FileVersion",      "2.5.0.0"
             VALUE "ProductName",      "Markdown Viewer"
-            VALUE "ProductVersion",   "2.4.1.0"
+            VALUE "ProductVersion",   "2.5.0.0"
             VALUE "OriginalFilename", "MarkdownViewer.exe"
         END
     END

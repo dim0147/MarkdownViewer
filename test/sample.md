@@ -50,6 +50,34 @@ flowchart LR
     D --> E
 ```
 
+## Math
+
+Inline math renders mid-sentence: Einstein's $E = mc^2$ stays on the line.
+
+A display equation on its own:
+
+$$\int_0^\infty e^{-x}\,dx = 1$$
+
+A fenced ` ```math ` block (also accepts ` ```latex `):
+
+```math
+\sum_{n=1}^{\infty} \frac{1}{n^2} = \frac{\pi^2}{6}
+```
+
+## Collapsed section
+
+Raw HTML now renders (markdown-it html:true + DOMPurify sanitizing the output):
+
+<details>
+<summary>Click to expand</summary>
+
+Hidden **markdown** content here, including a list:
+- item one
+- item two
+</details>
+
+Inline HTML also works: press <kbd>Ctrl</kbd>+<kbd>O</kbd>, and H<sub>2</sub>O / E=mc<sup>2</sup>.
+
 ---
 
 Setext Heading

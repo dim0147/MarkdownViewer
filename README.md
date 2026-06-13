@@ -54,6 +54,10 @@ portable.
 - **GitHub-style rendering** (CommonMark + GFM via markdown-it): headings,
   lists, task lists, tables with alignment, fenced code blocks with **syntax
   highlighting**, blockquotes, links, images, strikethrough, autolinks
+- **Diagrams** — ` ```mermaid ` fenced blocks render to SVG (theme-aware)
+- **Math** — LaTeX via KaTeX: inline `$…$`, display `$$…$$`, and ` ```math ` fences
+- **Collapsible sections** and other GitHub-flavored HTML (`<details>`,
+  `<kbd>`, `<sub>`/`<sup>`) — raw HTML is rendered but sanitized (DOMPurify)
 - **Light / dark theme** — follows Windows automatically, or force via settings
 - **Explorer integration** — right-click any `.md` file → *View with Markdown
   Viewer* (on Windows 11 it may be under *Show more options*)
@@ -65,9 +69,9 @@ portable.
 - **Back / Forward navigation** — a floating toolbar (or `Alt+←` / `Alt+→`)
   retraces the `.md` links you followed, restoring your scroll position in
   each document
-- **Safe by design** — raw HTML in documents is escaped (backed by a strict
-  CSP), document links can't escape the document's folder, and the viewer
-  never launches other local files
+- **Safe by design** — raw HTML in documents is sanitized with DOMPurify
+  (backed by a strict CSP), document links can't escape the document's folder,
+  and the viewer never launches other local files
 - Handles UTF-8 / UTF-16 / ANSI files; relative images resolve against the
   document's folder
 
@@ -82,7 +86,8 @@ portable.
   "fontSize": 16,
   "syntaxHighlight": true,
   "linkify": true,          // turn bare URLs into links
-  "typographer": false      // smart quotes and dashes
+  "typographer": false,     // smart quotes and dashes
+  "math": true              // render $...$ / $$...$$ / ```math with KaTeX
 }
 ```
 

@@ -6,22 +6,26 @@
 <html>
 <head>
 <meta charset="utf-8">
-<!-- Defense in depth: even if an HTML-injection bug ever slipped through
-     markdown-it (html:false), injected script/styles would not execute and
-     nothing could be exfiltrated. Also blocks remote images (tracking pixels);
-     add https: to img-src if remote images should be allowed. -->
+<!-- Document HTML model: markdown-it runs with html:true, so raw HTML in
+     documents (<details>/<summary>/<kbd>/<sub>/<sup> ...) is parsed GitHub-style;
+     DOMPurify sanitizes every rendered HTML string before it reaches innerHTML
+     (stripping <script>, event handlers and javascript: URLs). This CSP is a
+     second layer behind that sanitizer: even if a sanitizer bypass ever slipped
+     through, injected script/styles would not execute and nothing could be
+     exfiltrated. It also blocks remote images (tracking pixels); add https: to
+     img-src if remote images should be allowed. -->
 <!-- style-src allows 'unsafe-inline' because Mermaid injects <style> into the
      SVGs it generates. script-src stays locked to viewer.assets (the part that
      blocks injected JS); Mermaid runs at securityLevel:'strict' (labels
-     sanitized, click/script directives disabled), and html:false keeps document
-     HTML escaped, so no document-controlled markup reaches the DOM. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src https://viewer.assets; style-src https://viewer.assets 'unsafe-inline'; img-src https://viewer.assets https://viewer.doc data:;">
+     sanitized, click/script directives disabled). -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src https://viewer.assets; style-src https://viewer.assets 'unsafe-inline'; img-src https://viewer.assets https://viewer.doc data:; font-src https://viewer.assets;">
 <title>Markdown Viewer</title>
 <base href="https://viewer.doc/">
 <link id="css-md-light" rel="stylesheet" href="https://viewer.assets/vendor/github-markdown-light.min.css" media="(prefers-color-scheme: light)">
 <link id="css-md-dark"  rel="stylesheet" href="https://viewer.assets/vendor/github-markdown-dark.min.css"  media="(prefers-color-scheme: dark)">
 <link id="css-hl-light" rel="stylesheet" href="https://viewer.assets/vendor/hljs-github.min.css"           media="(prefers-color-scheme: light)">
 <link id="css-hl-dark"  rel="stylesheet" href="https://viewer.assets/vendor/hljs-github-dark.min.css"      media="(prefers-color-scheme: dark)">
+<link rel="stylesheet" href="https://viewer.assets/vendor/katex.min.css">
 <link rel="stylesheet" href="https://viewer.assets/app.css">
 </head>
 <body>
@@ -41,6 +45,12 @@
 <script src="https://viewer.assets/vendor/markdown-it-anchor.min.js"></script>
 <script src="https://viewer.assets/vendor/highlight.min.js"></script>
 <script src="https://viewer.assets/vendor/mermaid.min.js"></script>
+<!-- KaTeX must load before texmath (texmath consumes it as its engine). -->
+<script src="https://viewer.assets/vendor/katex.min.js"></script>
+<script src="https://viewer.assets/vendor/markdown-it-texmath.min.js"></script>
+<!-- DOMPurify must load before app.js: it sanitizes rendered document HTML
+     (window.DOMPurify) before any innerHTML assignment. -->
+<script src="https://viewer.assets/vendor/purify.min.js"></script>
 <script src="https://viewer.assets/app.js"></script>
 </body>
 </html>
