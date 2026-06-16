@@ -7,10 +7,11 @@
 //   { type: "render",  name: "file.md", path: "<full path>", markdown: "<source>" }
 //   { type: "welcome" }
 //   { type: "nav",     canBack: <bool>, canForward: <bool> }
+//   { type: "files",   files: ["a.md", ...], current: <index | -1> }
 //
-// app.js answers with the string "ready" once loaded (and "back"/"forward" from
-// the history toolbar); any file opened before "ready" is queued in m_current
-// and rendered from OnWebReady().
+// app.js answers with the string "ready" once loaded ("back"/"forward" from the
+// history toolbar; "openfile:<i>"/"reloadfiles" from the file sidebar); any file
+// opened before "ready" is queued in m_current and rendered from OnWebReady().
 
 #include <windows.h>
 #include <commdlg.h>
@@ -40,6 +41,8 @@ public:
         m_web.onSaveConfig = [this](const std::wstring& json) { OnSaveConfig(json); };
         m_web.onBack       = [this]() { GoBack(); };
         m_web.onForward    = [this]() { GoForward(); };
+        m_web.onOpenSibling   = [this](int i) { OpenSibling(i); };
+        m_web.onRefreshFiles  = [this]() { SendFiles(); };
         m_web.onFailed     = [this](const std::wstring& msg) {
             MessageBoxW(m_hwnd, msg.c_str(), cfg::kAppTitle, MB_OK | MB_ICONERROR);
         };
@@ -72,6 +75,17 @@ public:
     // from.
     void GoForward() {
         if (m_historyIndex + 1 < (int)m_history.size()) { ++m_historyIndex; Show(m_history[m_historyIndex]); }
+    }
+
+    // File sidebar click: open the index-th file from the list we last sent the
+    // renderer. We open by index into our own list (never a path supplied by the
+    // web side) so a click can only ever open a file we already enumerated; we
+    // re-check existence in case it was deleted since, refreshing the list if so.
+    void OpenSibling(int index) {
+        if (index < 0 || (size_t)index >= m_siblingFiles.size()) return;
+        std::wstring path = m_siblingFiles[index];
+        if (fileio::file_exists(path)) OpenFile(path);
+        else                          SendFiles();   // stale entry: rebuild the sidebar
     }
 
     // The File > Open Recent submenu (owned by main.cpp). Rebuilt whenever the
@@ -118,16 +132,45 @@ public:
 
     void ShowWelcome() {
         m_current.clear();
+        m_externallyChanged = false;
+        m_sig = fileio::FileSig{};
         SetWindowTextW(m_hwnd, cfg::kAppTitle);
-        if (m_ready) SendWelcome();
+        if (m_ready) { SendWelcome(); SendFiles(); }
     }
 
-    // F5: re-read config.json (so settings edits apply live) and the document.
+    // F5 / File > Reload: re-read config.json (so settings edits apply live)
+    // and the document. SendRender() re-captures the on-disk signature and
+    // clears any pending "changed on disk" flag, so this also dismisses the
+    // '*' title marker.
     void Reload() {
         if (!m_ready) return;
         SendConfig();
         if (!m_current.empty()) SendRender();
         else                    SendWelcome();
+        SendFiles();               // pick up files added/removed in the folder
+    }
+
+    // WM_TIMER: has the open document changed on disk since we rendered it? If
+    // so, mark the title with '*' and offer to reload. Called ~once a second.
+    void CheckFileChanged() {
+        if (!m_ready || m_current.empty() || m_changePromptOpen) return;
+        fileio::FileSig now = fileio::file_signature(m_current);
+        if (!now.valid) return;            // missing or mid-write — ignore this tick
+        if (!m_sig.valid) { m_sig = now; return; }
+        if (now == m_sig) return;          // unchanged
+        // Adopt the new signature up front so we prompt exactly once per change
+        // (even if the user dismisses the dialog, the next tick stays quiet).
+        m_sig = now;
+        m_externallyChanged = true;
+        UpdateTitle();
+        std::wstring dir, name;
+        fileio::split_path(m_current, dir, name);
+        m_changePromptOpen = true;
+        int r = MessageBoxW(m_hwnd,
+                            (name + L" has changed on disk.\n\nReload it now?").c_str(),
+                            cfg::kAppTitle, MB_YESNO | MB_ICONQUESTION);
+        m_changePromptOpen = false;
+        if (r == IDYES) Reload();          // SendRender() clears the '*' marker
     }
 
     void OpenDialog() {
@@ -199,12 +242,25 @@ private:
     std::wstring m_current;        // currently displayed file (empty = welcome)
     bool         m_ready = false;  // app.js is loaded and listening
 
+    // External-change watcher (driven by WM_TIMER -> CheckFileChanged): the
+    // on-disk fingerprint captured when we last rendered m_current, whether an
+    // unreloaded change has been seen (drives the '*' title marker), and a guard
+    // so the modal reload prompt is never stacked on itself.
+    fileio::FileSig m_sig;
+    bool            m_externallyChanged = false;
+    bool            m_changePromptOpen  = false;
+
     // Back/forward history: visited file paths oldest->newest, with m_historyIndex
     // pointing at the current document. Opening a file truncates any forward
     // entries (browser semantics); the renderer's scroll memory is keyed off the
     // path we send, so Back/Forward restores where the user was in each doc.
     std::vector<std::wstring> m_history;
     int                       m_historyIndex = -1;
+
+    // Full paths of the markdown files in the current document's folder, in the
+    // same order last sent to the renderer's sidebar. The renderer references
+    // them by index ("openfile:<i>") so it can never name an arbitrary path.
+    std::vector<std::wstring> m_siblingFiles;
 
     // Append `path` as the new current document, dropping any forward history.
     // A no-op when it equals the current entry (e.g. Open Recent on the open
@@ -221,10 +277,20 @@ private:
     // renderer is up, push the document and the back/forward button state.
     void Show(const std::wstring& path) {
         m_current = path;
+        m_externallyChanged = false;   // a fresh display reflects the file on disk
+        UpdateTitle();
+        if (m_ready) { SendRender(); SendNavState(); SendFiles(); }
+    }
+
+    // Window title: "[*]name - Markdown Viewer", where the leading '*' flags a
+    // document that has changed on disk but not yet been reloaded.
+    void UpdateTitle() {
+        if (m_current.empty()) { SetWindowTextW(m_hwnd, cfg::kAppTitle); return; }
         std::wstring dir, name;
-        fileio::split_path(path, dir, name);
-        SetWindowTextW(m_hwnd, (name + L" - " + cfg::kAppTitle).c_str());
-        if (m_ready) { SendRender(); SendNavState(); }
+        fileio::split_path(m_current, dir, name);
+        std::wstring title = (m_externallyChanged ? L"*" : L"") + name +
+                             L" - " + cfg::kAppTitle;
+        SetWindowTextW(m_hwnd, title.c_str());
     }
 
     // Build a menu label for the i-th recent file: an "&1".."&9","&0" mnemonic
@@ -254,6 +320,7 @@ private:
         if (!m_current.empty()) SendRender();
         else                    SendWelcome();
         SendNavState();            // restore the toolbar after a page (re)load
+        SendFiles();               // populate the file sidebar
     }
 
     // Tell the renderer whether Back/Forward are currently possible so it can
@@ -264,6 +331,36 @@ private:
         std::string json = std::string("{\"type\":\"nav\",\"canBack\":") +
                            (back ? "true" : "false") + ",\"canForward\":" +
                            (fwd ? "true" : "false") + "}";
+        m_web.PostJson(fileio::widen(json));
+    }
+
+    // Scan the open document's folder for sibling markdown files and push the
+    // list (plus the index of the current file) to the renderer's sidebar. The
+    // renderer shows the sidebar only when there is more than one entry. On the
+    // welcome screen (no document) an empty list is sent so the sidebar hides.
+    void SendFiles() {
+        if (!m_ready) return;
+        m_siblingFiles.clear();
+        if (m_current.empty()) {
+            m_web.PostJson(L"{\"type\":\"files\",\"files\":[],\"current\":-1}");
+            return;
+        }
+        std::wstring dir, name;
+        fileio::split_path(m_current, dir, name);
+        std::vector<std::wstring> names = fileio::list_markdown_files(dir);
+        std::wstring curFull = fileio::full_path(m_current);
+        int current = -1;
+        std::string arr;
+        for (size_t i = 0; i < names.size(); ++i) {
+            m_siblingFiles.push_back(dir + L"\\" + names[i]);
+            if (current < 0 &&
+                lstrcmpiW(fileio::full_path(m_siblingFiles.back()).c_str(), curFull.c_str()) == 0)
+                current = (int)i;
+            if (!arr.empty()) arr += ",";
+            arr += "\"" + fileio::json_escape(fileio::narrow(names[i])) + "\"";
+        }
+        std::string json = "{\"type\":\"files\",\"files\":[" + arr +
+                           "],\"current\":" + std::to_string(current) + "}";
         m_web.PostJson(fileio::widen(json));
     }
 
@@ -284,6 +381,12 @@ private:
                         MB_OK | MB_ICONERROR);
             return;
         }
+        // The displayed content now matches what's on disk: capture its
+        // fingerprint and drop any pending "changed" marker (UpdateTitle clears
+        // the leading '*' that CheckFileChanged may have added).
+        m_sig = fileio::file_signature(m_current);
+        m_externallyChanged = false;
+        UpdateTitle();
         std::wstring dir, name;
         fileio::split_path(m_current, dir, name);
         m_web.SetDocDir(dir);

@@ -4,7 +4,10 @@
 
 #include <windows.h>
 #include <shlobj.h>
+#include <shlwapi.h>
 #include <string>
+#include <vector>
+#include <algorithm>
 #include "config.h"
 
 namespace fileio {
@@ -86,6 +89,34 @@ inline bool file_exists(const std::wstring& path) {
     return a != INVALID_FILE_ATTRIBUTES && !(a & FILE_ATTRIBUTE_DIRECTORY);
 }
 
+// A cheap "did this file change on disk?" fingerprint: last-write time + size,
+// fetched without opening a handle. `valid` is false when the file can't be
+// stat'd (missing, or briefly locked while another process writes it). Two
+// valid signatures compare equal only when both fields match.
+struct FileSig {
+    FILETIME write = {};
+    LONGLONG size  = 0;
+    bool     valid = false;
+    bool operator==(const FileSig& o) const {
+        return valid && o.valid && size == o.size &&
+               write.dwLowDateTime  == o.write.dwLowDateTime &&
+               write.dwHighDateTime == o.write.dwHighDateTime;
+    }
+    bool operator!=(const FileSig& o) const { return !(*this == o); }
+};
+
+inline FileSig file_signature(const std::wstring& path) {
+    FileSig s;
+    WIN32_FILE_ATTRIBUTE_DATA fad = {};
+    if (GetFileAttributesExW(path.c_str(), GetFileExInfoStandard, &fad) &&
+        !(fad.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
+        s.write = fad.ftLastWriteTime;
+        s.size  = ((LONGLONG)fad.nFileSizeHigh << 32) | fad.nFileSizeLow;
+        s.valid = true;
+    }
+    return s;
+}
+
 // Canonicalize a path: resolve "." / ".." and make it fully qualified.
 // Returns an empty string on failure (treat that as "reject").
 inline std::wstring full_path(const std::wstring& path) {
@@ -129,6 +160,28 @@ inline bool has_markdown_ext(const std::wstring& path) {
     for (const wchar_t* e : cfg::kMarkdownExts)
         if (lstrcmpiW(ext.c_str(), e) == 0) return true;
     return false;
+}
+
+// List the markdown file *names* (not full paths) directly inside `dir`, sorted
+// case-insensitively in natural order (so "file2.md" sorts before "file10.md").
+// Subdirectories are not recursed; hidden/system files are skipped. Drives the
+// file sidebar (see App::SendFiles).
+inline std::vector<std::wstring> list_markdown_files(const std::wstring& dir) {
+    std::vector<std::wstring> names;
+    WIN32_FIND_DATAW fd = {};
+    HANDLE h = FindFirstFileW((dir + L"\\*").c_str(), &fd);
+    if (h == INVALID_HANDLE_VALUE) return names;
+    do {
+        if (fd.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_HIDDEN |
+                                   FILE_ATTRIBUTE_SYSTEM))
+            continue;
+        if (has_markdown_ext(fd.cFileName)) names.push_back(fd.cFileName);
+    } while (FindNextFileW(h, &fd));
+    FindClose(h);
+    std::sort(names.begin(), names.end(), [](const std::wstring& a, const std::wstring& b) {
+        return StrCmpLogicalW(a.c_str(), b.c_str()) < 0;
+    });
+    return names;
 }
 
 // Escape a UTF-8 string for embedding inside a JSON string literal.

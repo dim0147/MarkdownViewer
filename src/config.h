@@ -8,7 +8,7 @@
 namespace cfg {
 
 constexpr wchar_t kAppTitle[]    = L"Markdown Viewer";
-constexpr wchar_t kAppVersion[]  = L"2.5.0";
+constexpr wchar_t kAppVersion[]  = L"2.6.0";
 constexpr wchar_t kWindowClass[] = L"MarkdownViewerWnd";
 constexpr wchar_t kAppDirName[]  = L"MarkdownViewer";   // folder name under %APPDATA% / %LOCALAPPDATA%
 
@@ -32,6 +32,11 @@ constexpr wchar_t kUpdatePath[]      = L"/repos/dim0147/MarkdownViewer/releases/
 constexpr wchar_t kReleasesPageUrl[] = L"https://github.com/dim0147/MarkdownViewer/releases/latest";
 
 constexpr long long kMaxFileBytes = 64LL * 1024 * 1024;   // refuse files larger than 64 MB
+
+// Poll the currently open document for external edits (last-write time + size)
+// on this WM_TIMER, prompting the user to reload when it changes on disk.
+constexpr UINT kFileWatchTimerId   = 1;
+constexpr UINT kFileWatchIntervalMs = 1000;
 
 constexpr int kDefaultWindowW = 1060;
 constexpr int kDefaultWindowH = 800;

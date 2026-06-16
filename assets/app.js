@@ -417,6 +417,98 @@
     }
   });
 
+  // ---- file sidebar --------------------------------------------------------
+  // Lists the .md files in the open document's folder (the host sends the names
+  // and the index of the current one via {type:"files"}). Clicking an entry asks
+  // the host to open it by index ("openfile:<i>"); the refresh button re-scans
+  // ("reloadfiles"). Collapsed state and width persist in localStorage. The
+  // sidebar appears only when the folder holds more than one markdown file.
+  const sidebar = (() => {
+    const aside = document.getElementById('mv-sidebar');
+    const listEl = document.getElementById('mv-filelist');
+    const showBtn = document.getElementById('mv-sb-show');
+    const collapseBtn = document.getElementById('mv-sb-collapse');
+    const refreshBtn = document.getElementById('mv-sb-refresh');
+    const resizeEl = document.getElementById('mv-sb-resize');
+    const MIN_W = 160, MAX_W = 520;
+
+    let hasFiles = false;
+    let collapsed = false;
+    let width = 260;
+    try { collapsed = localStorage.getItem('mv.sidebar.collapsed') === '1'; } catch {}
+    try {
+      const w = parseInt(localStorage.getItem('mv.sidebar.width'), 10);
+      if (w >= MIN_W && w <= MAX_W) width = w;
+    } catch {}
+    const setWidth = (w) => document.documentElement.style.setProperty('--sidebar-width', w + 'px');
+    setWidth(width);
+
+    // Reflect (hasFiles, collapsed) onto the body classes the CSS keys off.
+    function apply() {
+      const open = hasFiles && !collapsed;
+      document.body.classList.toggle('mv-has-sidebar', open);
+      document.body.classList.toggle('mv-sb-collapsed', hasFiles && collapsed);
+      aside.hidden = !open;
+      showBtn.hidden = !(hasFiles && collapsed);
+    }
+
+    function setCollapsed(v) {
+      collapsed = v;
+      try { localStorage.setItem('mv.sidebar.collapsed', v ? '1' : '0'); } catch {}
+      apply();
+    }
+
+    function update(files, current) {
+      hasFiles = files.length > 1;          // only worth showing with a sibling
+      listEl.textContent = '';
+      files.forEach((fname, i) => {
+        const li = el('li', 'mv-file' + (i === current ? ' mv-file-active' : ''), { text: fname });
+        li.title = fname;
+        li.tabIndex = 0;
+        li.dataset.index = i;
+        if (i === current) li.setAttribute('aria-current', 'true');
+        listEl.append(li);
+      });
+      apply();
+      const active = listEl.querySelector('.mv-file-active');
+      if (active && !collapsed) active.scrollIntoView({ block: 'nearest' });
+    }
+
+    const openFromEl = (li) => {
+      if (li) window.chrome.webview.postMessage('openfile:' + li.dataset.index);
+    };
+    listEl.addEventListener('click', (e) => openFromEl(e.target.closest('.mv-file')));
+    listEl.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      const li = e.target.closest('.mv-file');
+      if (li) { e.preventDefault(); openFromEl(li); }
+    });
+    collapseBtn.addEventListener('click', () => setCollapsed(true));
+    showBtn.addEventListener('click', () => setCollapsed(false));
+    refreshBtn.addEventListener('click', () => window.chrome.webview.postMessage('reloadfiles'));
+
+    // Drag the right edge to resize; the width is committed to storage on release.
+    resizeEl.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      resizeEl.setPointerCapture(e.pointerId);
+      const startX = e.clientX, startW = width;
+      const move = (ev) => {
+        width = Math.max(MIN_W, Math.min(MAX_W, startW + (ev.clientX - startX)));
+        setWidth(width);
+      };
+      const up = () => {
+        resizeEl.removeEventListener('pointermove', move);
+        resizeEl.removeEventListener('pointerup', up);
+        try { localStorage.setItem('mv.sidebar.width', String(width)); } catch {}
+      };
+      resizeEl.addEventListener('pointermove', move);
+      resizeEl.addEventListener('pointerup', up);
+    });
+
+    apply();
+    return { update };
+  })();
+
   window.chrome.webview.addEventListener('message', (e) => {
     const m = e.data;
     if (!m || typeof m !== 'object') return;
@@ -426,6 +518,7 @@
       case 'welcome':  showWelcome(); break;
       case 'settings': settings.open(); break;
       case 'nav':      applyNavState(m.canBack, m.canForward); break;
+      case 'files':    sidebar.update(m.files || [], typeof m.current === 'number' ? m.current : -1); break;
     }
   });
 

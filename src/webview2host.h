@@ -16,6 +16,7 @@
 #include <windows.h>
 #include <shellapi.h>
 #include <ole2.h>
+#include <stdlib.h>
 #include <string>
 #include <functional>
 #include <WebView2.h>
@@ -133,6 +134,8 @@ public:
     std::function<void(const std::wstring&)> onSaveConfig; // settings panel asked to persist config.json
     std::function<void()>                    onBack;       // history toolbar: go back
     std::function<void()>                    onForward;    // history toolbar: go forward
+    std::function<void(int)>                 onOpenSibling;// file sidebar: open the i-th listed file
+    std::function<void()>                    onRefreshFiles;// file sidebar: re-scan the folder
     std::function<void(const std::wstring&)> onFailed;     // creation failed (message for the user)
 
     // Begin async creation. The control appears in `hwnd`'s client area.
@@ -307,9 +310,11 @@ private:
         EventRegistrationToken tok;
 
         // String messages from app.js:
-        //   "ready"        - the renderer has loaded and is listening
-        //   "save:<json>"  - the settings panel wants <json> written to config.json
-        //   "back"/"forward" - the history toolbar's navigation buttons
+        //   "ready"            - the renderer has loaded and is listening
+        //   "save:<json>"      - the settings panel wants <json> written to config.json
+        //   "back"/"forward"   - the history toolbar's navigation buttons
+        //   "openfile:<index>" - the file sidebar: open the index-th listed file
+        //   "reloadfiles"      - the file sidebar's refresh button: re-scan the folder
         using MsgHandler = ComHandler<ICoreWebView2WebMessageReceivedEventHandler,
                                       ICoreWebView2*, ICoreWebView2WebMessageReceivedEventArgs*>;
         m_webview->add_WebMessageReceived(
@@ -321,6 +326,8 @@ private:
                     if (s == L"ready") { if (onReady) onReady(); }
                     else if (s == L"back") { if (onBack) onBack(); }
                     else if (s == L"forward") { if (onForward) onForward(); }
+                    else if (s == L"reloadfiles") { if (onRefreshFiles) onRefreshFiles(); }
+                    else if (s.rfind(L"openfile:", 0) == 0) { if (onOpenSibling) onOpenSibling(_wtoi(s.c_str() + 9)); }
                     else if (s.rfind(L"save:", 0) == 0) { if (onSaveConfig) onSaveConfig(s.substr(5)); }
                 }
                 return S_OK;

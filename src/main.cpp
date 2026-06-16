@@ -56,7 +56,12 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     case WM_CREATE:
         if (!g_app.Init(hwnd)) return -1;
         DragAcceptFiles(hwnd, TRUE);
+        SetTimer(hwnd, cfg::kFileWatchTimerId, cfg::kFileWatchIntervalMs, nullptr);
         return 0;
+
+    case WM_TIMER:
+        if (wp == cfg::kFileWatchTimerId) { g_app.CheckFileChanged(); return 0; }
+        break;
 
     case WM_SIZE:
         g_app.Resize();
@@ -116,6 +121,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         break;
 
     case WM_DESTROY:
+        KillTimer(hwnd, cfg::kFileWatchTimerId);
         g_app.Shutdown();
         PostQuitMessage(0);
         return 0;
