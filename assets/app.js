@@ -131,11 +131,82 @@
         fig.className = 'mermaid';
         fig.innerHTML = svg;                      // trusted: strict-mode mermaid output
         pre.replaceWith(fig);
+        addMermaidPanZoom(fig);                   // drag-to-pan + wheel/button zoom
       }).catch((err) => {
         pre.classList.add('mermaid-error');       // leave source visible on parse error
         pre.title = String((err && err.message) || err);
       });
     }
+  }
+
+  // Make a rendered mermaid diagram navigable: drag to pan, wheel/buttons to
+  // zoom. The .mermaid div is a clipped viewport; we transform the SVG inside it
+  // (translate + scale, origin 0 0) and keep the point under the cursor fixed
+  // while zooming. Pure CSS-transform on app-created elements — no extra deps,
+  // no document HTML, so the sanitizer/CSP story is unchanged.
+  function addMermaidPanZoom(fig) {
+    const svg = fig.querySelector('svg');
+    if (!svg) return;
+    const MIN = 0.2, MAX = 12;
+    let scale = 1, tx = 0, ty = 0;
+
+    svg.style.transformOrigin = '0 0';
+    svg.style.cursor = 'grab';
+
+    const apply = () => {
+      svg.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
+    };
+    const zoomAt = (cx, cy, factor) => {
+      const next = Math.min(MAX, Math.max(MIN, scale * factor));
+      const k = next / scale;
+      tx = cx - k * (cx - tx);                    // keep (cx,cy) pinned under cursor
+      ty = cy - k * (cy - ty);
+      scale = next;
+      apply();
+    };
+    const reset = () => { scale = 1; tx = 0; ty = 0; apply(); };
+
+    fig.addEventListener('wheel', (e) => {
+      e.preventDefault();                         // zoom instead of scrolling page
+      const r = fig.getBoundingClientRect();
+      zoomAt(e.clientX - r.left, e.clientY - r.top, e.deltaY < 0 ? 1.1 : 1 / 1.1);
+    }, { passive: false });
+
+    let dragging = false, lastX = 0, lastY = 0;
+    svg.addEventListener('pointerdown', (e) => {
+      dragging = true; lastX = e.clientX; lastY = e.clientY;
+      svg.style.cursor = 'grabbing';
+      svg.setPointerCapture(e.pointerId);
+    });
+    svg.addEventListener('pointermove', (e) => {
+      if (!dragging) return;
+      tx += e.clientX - lastX; ty += e.clientY - lastY;
+      lastX = e.clientX; lastY = e.clientY;
+      apply();
+    });
+    const endDrag = () => { dragging = false; svg.style.cursor = 'grab'; };
+    svg.addEventListener('pointerup', endDrag);
+    svg.addEventListener('pointercancel', endDrag);
+    fig.addEventListener('dblclick', reset);
+
+    const bar = document.createElement('div');
+    bar.className = 'mermaid-zoom';
+    const btn = (label, title, onClick) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = label;
+      b.title = title;
+      b.addEventListener('click', onClick);
+      bar.appendChild(b);
+    };
+    const center = (factor) => {
+      const r = fig.getBoundingClientRect();
+      zoomAt(r.width / 2, r.height / 2, factor);
+    };
+    btn('−', 'Zoom out', () => center(1 / 1.3));
+    btn('+', 'Zoom in', () => center(1.3));
+    btn('↺', 'Reset (or double-click)', reset);
+    fig.appendChild(bar);
   }
 
   // ---- KaTeX math fences ---------------------------------------------------
