@@ -108,6 +108,12 @@
       window.mermaid.initialize({
         startOnLoad: false,
         securityLevel: 'strict',
+        // Without this, a failed render() draws an error "bomb" into a temp
+        // element mermaid appends to <body> (outside #content) and then throws,
+        // so it leaks past the next document. Suppressing it makes render()
+        // throw cleanly and clean up; our renderMermaid() catch handler keeps
+        // the source block visible with the error in its tooltip instead.
+        suppressErrorRendering: true,
         theme: mermaidIsDark(c) ? 'dark' : 'default',
       });
     } catch (e) { console.warn('mermaid init failed:', e); }
