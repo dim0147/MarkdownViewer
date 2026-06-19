@@ -140,35 +140,51 @@
   }
 
   // Make a rendered mermaid diagram navigable: drag to pan, wheel/buttons to
-  // zoom. The .mermaid div is a clipped viewport; we transform the SVG inside it
-  // (translate + scale, origin 0 0) and keep the point under the cursor fixed
-  // while zooming. Pure CSS-transform on app-created elements — no extra deps,
-  // no document HTML, so the sanitizer/CSP story is unchanged.
+  // zoom. We drive the SVG's viewBox (the user-coordinate window the browser
+  // maps onto the fixed-size SVG viewport) rather than a CSS transform: a
+  // transform-scaled SVG gets rasterized into a GPU layer at its natural size
+  // and the bitmap is then stretched, so zoomed-in content blurs. Re-aiming the
+  // viewBox instead makes the browser re-render the vector geometry crisply at
+  // every zoom level. Pure attribute tweaks on app-created elements — no extra
+  // deps, no document HTML, so the sanitizer/CSP story is unchanged.
   function addMermaidPanZoom(fig) {
     const svg = fig.querySelector('svg');
     if (!svg) return;
-    const MIN = 0.2, MAX = 12;
-    let scale = 1, tx = 0, ty = 0;
+    const MIN = 0.2, MAX = 12;                    // zoom factor vs. the fit view
 
-    svg.style.transformOrigin = '0 0';
+    // Establish the base viewBox (the fully-zoomed-out "fit" window). mermaid
+    // emits one; fall back to width/height attrs if it ever doesn't.
+    let base = svg.viewBox && svg.viewBox.baseVal;
+    if (!base || !base.width || !base.height) {
+      const w = parseFloat(svg.getAttribute('width')) || svg.getBoundingClientRect().width || 1;
+      const h = parseFloat(svg.getAttribute('height')) || svg.getBoundingClientRect().height || 1;
+      svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+      base = svg.viewBox.baseVal;
+    }
+    const baseX = base.x, baseY = base.y, baseW = base.width, baseH = base.height;
+    let vx = baseX, vy = baseY, vw = baseW, vh = baseH;
+
     svg.style.cursor = 'grab';
 
-    const apply = () => {
-      svg.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
-    };
+    const apply = () => { svg.setAttribute('viewBox', `${vx} ${vy} ${vw} ${vh}`); };
+    // (cx,cy) are pixels relative to the SVG's display box; pin that point.
     const zoomAt = (cx, cy, factor) => {
-      const next = Math.min(MAX, Math.max(MIN, scale * factor));
-      const k = next / scale;
-      tx = cx - k * (cx - tx);                    // keep (cx,cy) pinned under cursor
-      ty = cy - k * (cy - ty);
-      scale = next;
+      const r = svg.getBoundingClientRect();
+      const cur = baseW / vw;                      // current zoom factor
+      const next = Math.min(MAX, Math.max(MIN, cur * factor));
+      const nw = baseW / next, nh = baseH / next;
+      const fx = r.width ? cx / r.width : 0.5;     // cursor as fraction of box
+      const fy = r.height ? cy / r.height : 0.5;
+      vx += fx * (vw - nw);                        // keep user point under cursor
+      vy += fy * (vh - nh);
+      vw = nw; vh = nh;
       apply();
     };
-    const reset = () => { scale = 1; tx = 0; ty = 0; apply(); };
+    const reset = () => { vx = baseX; vy = baseY; vw = baseW; vh = baseH; apply(); };
 
     fig.addEventListener('wheel', (e) => {
       e.preventDefault();                         // zoom instead of scrolling page
-      const r = fig.getBoundingClientRect();
+      const r = svg.getBoundingClientRect();
       zoomAt(e.clientX - r.left, e.clientY - r.top, e.deltaY < 0 ? 1.1 : 1 / 1.1);
     }, { passive: false });
 
@@ -180,7 +196,9 @@
     });
     svg.addEventListener('pointermove', (e) => {
       if (!dragging) return;
-      tx += e.clientX - lastX; ty += e.clientY - lastY;
+      const r = svg.getBoundingClientRect();      // px → user units via current viewBox
+      vx -= (e.clientX - lastX) * (vw / (r.width || 1));
+      vy -= (e.clientY - lastY) * (vh / (r.height || 1));
       lastX = e.clientX; lastY = e.clientY;
       apply();
     });
@@ -200,7 +218,7 @@
       bar.appendChild(b);
     };
     const center = (factor) => {
-      const r = fig.getBoundingClientRect();
+      const r = svg.getBoundingClientRect();
       zoomAt(r.width / 2, r.height / 2, factor);
     };
     btn('−', 'Zoom out', () => center(1 / 1.3));

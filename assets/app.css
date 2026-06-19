@@ -231,8 +231,9 @@ body.mv-sb-collapsed #mv-nav { left: 52px; }   /* clear the floating show button
 .mv-sb-show[hidden] { display: none; }
 
 /* ----- mermaid diagrams (```mermaid fenced blocks, rendered by app.js) ----- */
-/* A clipped viewport: app.js pans/zooms the SVG via CSS transform inside it,
-   so zoomed-in content is clipped to the box rather than reflowing the page. */
+/* A clipped viewport: app.js pans/zooms by re-aiming the SVG's viewBox (not a
+   CSS transform — that rasterizes and blurs on zoom), so zoomed-in content is
+   clipped to the fixed-size SVG box rather than reflowing the page. */
 .mermaid {
   position: relative;
   margin: 16px 0;
@@ -240,7 +241,7 @@ body.mv-sb-collapsed #mv-nav { left: 52px; }   /* clear the floating show button
   overflow: hidden;
   cursor: grab;
 }
-.mermaid svg { max-width: 100%; height: auto; will-change: transform; }
+.mermaid svg { max-width: 100%; height: auto; }
 /* zoom controls — float over the diagram, fade in on hover */
 .mermaid-zoom {
   position: absolute;
