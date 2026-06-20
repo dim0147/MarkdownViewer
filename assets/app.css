@@ -240,6 +240,10 @@ body.mv-sb-collapsed #mv-nav { left: 52px; }   /* clear the floating show button
   max-height: 80vh;            /* tall diagrams stay scannable; pan to see more */
   overflow: hidden;
   cursor: grab;
+  /* drag-to-pan would otherwise sweep-select the SVG's label text; the diagram
+     is an interactive canvas, not prose, so suppress selection entirely. */
+  -webkit-user-select: none;
+  user-select: none;
 }
 .mermaid svg { max-width: 100%; height: auto; }
 /* zoom controls — float over the diagram, fade in on hover */
