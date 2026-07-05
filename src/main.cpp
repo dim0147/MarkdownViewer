@@ -33,6 +33,9 @@ static HMENU build_menu() {
     AppendMenuW(file, MF_POPUP, (UINT_PTR)g_recentMenu, L"Open &Recent");
     AppendMenuW(file, MF_STRING, cfg::ID_RELOAD, L"&Reload\tF5");
     AppendMenuW(file, MF_SEPARATOR, 0, nullptr);
+    AppendMenuW(file, MF_STRING, cfg::ID_EDIT, L"&Edit Document\tCtrl+E");
+    AppendMenuW(file, MF_STRING, cfg::ID_SAVE, L"&Save\tCtrl+S");
+    AppendMenuW(file, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(file, MF_STRING, cfg::ID_EXIT, L"E&xit");
     HMENU tools = CreatePopupMenu();
     AppendMenuW(tools, MF_STRING, cfg::ID_INSTALL, L"&Add to Explorer right-click menu");
@@ -93,7 +96,9 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         switch (LOWORD(wp)) {
         case cfg::ID_OPEN:       g_app.OpenDialog(); return 0;
         case cfg::ID_RELOAD:     g_app.Reload(); return 0;
-        case cfg::ID_EXIT:       DestroyWindow(hwnd); return 0;
+        case cfg::ID_EDIT:       g_app.ToggleEdit(); return 0;
+        case cfg::ID_SAVE:       g_app.RequestSave(); return 0;
+        case cfg::ID_EXIT:       g_app.RequestClose(); return 0;
         case cfg::ID_INSTALL:    reg::install_context_menu(hwnd, false); return 0;
         case cfg::ID_UNINSTALL:  reg::uninstall_context_menu(hwnd, false); return 0;
         case cfg::ID_SETTINGS:   g_app.OpenSettings(); return 0;
@@ -106,6 +111,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                         L"Rendering: markdown-it + highlight.js in WebView2.\n\n"
                         L"\x2022 Drag && drop a .md file onto the window\n"
                         L"\x2022 Ctrl+O to open a file, F5 to reload\n"
+                        L"\x2022 Ctrl+E to edit, Ctrl+S to save\n"
                         L"\x2022 Tools menu adds \"View with Markdown Viewer\"\n"
                         L"   to the Explorer right-click menu\n"
                         L"\x2022 Tools > Settings to customize theme, fonts, ...").c_str(),
@@ -120,6 +126,21 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         }
         break;
 
+    case WM_CLOSE:
+        g_app.RequestClose();   // prompts to save unsaved editor changes first
+        return 0;
+
+    // Logoff/shutdown bypasses WM_CLOSE. With unsaved editor changes, block
+    // the session end the sanctioned way (Windows shows the reason on the
+    // "apps are preventing shutdown" screen) so the edits aren't destroyed.
+    case WM_QUERYENDSESSION:
+        ShutdownBlockReasonDestroy(hwnd);   // drop any stale reason first
+        if (g_app.IsDirty()) {
+            ShutdownBlockReasonCreate(hwnd, L"You have unsaved changes in Markdown Viewer.");
+            return FALSE;
+        }
+        return TRUE;
+
     case WM_DESTROY:
         KillTimer(hwnd, cfg::kFileWatchTimerId);
         g_app.Shutdown();
@@ -131,6 +152,12 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         if (msg == cfg::WM_APP_UPDATE_RESULT) {
             update::Result* r = reinterpret_cast<update::Result*>(lp);
             if (r) { g_app.OnUpdateResult(*r); delete r; }
+            return 0;
+        }
+        // A file open that needs the unsaved-changes prompt, deferred out of
+        // an OLE drop / WebView2 event callback (see App::OpenFile).
+        if (msg == cfg::WM_APP_OPEN_PENDING) {
+            g_app.OnPendingOpen();
             return 0;
         }
         break;
@@ -181,8 +208,10 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmdShow) {
     ACCEL acc[] = {
         { FVIRTKEY | FCONTROL, 'O',   cfg::ID_OPEN },
         { FVIRTKEY,            VK_F5, cfg::ID_RELOAD },
+        { FVIRTKEY | FCONTROL, 'E',   cfg::ID_EDIT },
+        { FVIRTKEY | FCONTROL, 'S',   cfg::ID_SAVE },
     };
-    HACCEL haccel = CreateAcceleratorTableW(acc, 2);
+    HACCEL haccel = CreateAcceleratorTableW(acc, 4);
 
     MSG msg;
     while (GetMessageW(&msg, nullptr, 0, 0) > 0) {

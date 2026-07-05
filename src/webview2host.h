@@ -136,6 +136,9 @@ public:
     std::function<void()>                    onForward;    // history toolbar: go forward
     std::function<void(int)>                 onOpenSibling;// file sidebar: open the i-th listed file
     std::function<void()>                    onRefreshFiles;// file sidebar: re-scan the folder
+    std::function<void(const std::wstring&)> onSaveDoc;    // editor asked to write the document text
+    std::function<void()>                    onNoSave;     // editor answered a save request with "nothing to save"
+    std::function<void(bool)>                onDirty;      // editor's unsaved-changes state changed
     std::function<void(const std::wstring&)> onFailed;     // creation failed (message for the user)
 
     // Begin async creation. The control appears in `hwnd`'s client area.
@@ -315,6 +318,10 @@ private:
         //   "back"/"forward"   - the history toolbar's navigation buttons
         //   "openfile:<index>" - the file sidebar: open the index-th listed file
         //   "reloadfiles"      - the file sidebar's refresh button: re-scan the folder
+        //   "savedoc:<text>"   - the editor wants <text> written to the open document
+        //   "nosave"           - reply to {type:"save"} when there is nothing to write
+        //                        (guarantees every save request gets exactly one answer)
+        //   "dirty:1" / "dirty:0" - the editor gained/lost unsaved changes
         using MsgHandler = ComHandler<ICoreWebView2WebMessageReceivedEventHandler,
                                       ICoreWebView2*, ICoreWebView2WebMessageReceivedEventArgs*>;
         m_webview->add_WebMessageReceived(
@@ -328,6 +335,9 @@ private:
                     else if (s == L"forward") { if (onForward) onForward(); }
                     else if (s == L"reloadfiles") { if (onRefreshFiles) onRefreshFiles(); }
                     else if (s.rfind(L"openfile:", 0) == 0) { if (onOpenSibling) onOpenSibling(_wtoi(s.c_str() + 9)); }
+                    else if (s == L"nosave") { if (onNoSave) onNoSave(); }
+                    else if (s.rfind(L"savedoc:", 0) == 0) { if (onSaveDoc) onSaveDoc(s.substr(8)); }
+                    else if (s.rfind(L"dirty:", 0) == 0) { if (onDirty) onDirty(s.size() > 6 && s[6] == L'1'); }
                     else if (s.rfind(L"save:", 0) == 0) { if (onSaveConfig) onSaveConfig(s.substr(5)); }
                 }
                 return S_OK;
@@ -379,6 +389,10 @@ private:
                 bool ctrl = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
                 if (key == VK_F5)               { args->put_Handled(TRUE); PostMessageW(m_hwnd, WM_COMMAND, cfg::ID_RELOAD, 0); }
                 else if (ctrl && key == 'O')    { args->put_Handled(TRUE); PostMessageW(m_hwnd, WM_COMMAND, cfg::ID_OPEN, 0); }
+                else if (ctrl && key == 'E')    { args->put_Handled(TRUE); PostMessageW(m_hwnd, WM_COMMAND, cfg::ID_EDIT, 0); }
+                // Ctrl+S must be claimed here anyway (the browser's "save page
+                // as" dialog would appear otherwise), so route it like the rest.
+                else if (ctrl && key == 'S')    { args->put_Handled(TRUE); PostMessageW(m_hwnd, WM_COMMAND, cfg::ID_SAVE, 0); }
                 return S_OK;
             }), &tok);
     }

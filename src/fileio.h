@@ -28,9 +28,20 @@ inline std::string narrow(const std::wstring& w) {
     return s;
 }
 
+// How a text file was stored on disk, captured by read_file_text so that
+// write_file_text can save the document back in the same shape (encoding, BOM,
+// CRLF line endings) instead of silently rewriting it.
+struct TextFormat {
+    enum Enc { Utf8, Utf8Bom, Utf16LE, Utf16BE, Ansi };
+    Enc  enc  = Utf8;
+    bool crlf = false;    // the file used \r\n line endings
+};
+
 // Read a text file as UTF-8; handles UTF-8 (with/without BOM), UTF-16 LE/BE,
-// and falls back to the system ANSI code page for non-UTF-8 content.
-inline bool read_file_text(const std::wstring& path, std::string& out) {
+// and falls back to the system ANSI code page for non-UTF-8 content. `fmt`
+// (optional) receives the on-disk format for a later write_file_text.
+inline bool read_file_text(const std::wstring& path, std::string& out,
+                           TextFormat* fmt = nullptr) {
     HANDLE h = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
                            nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (h == INVALID_HANDLE_VALUE) return false;
@@ -44,33 +55,43 @@ inline bool read_file_text(const std::wstring& path, std::string& out) {
     if (!ok) return false;
     buf.resize(read);
 
+    TextFormat f;
     if (buf.size() >= 3 && (unsigned char)buf[0] == 0xEF && (unsigned char)buf[1] == 0xBB &&
         (unsigned char)buf[2] == 0xBF) {
         out = buf.substr(3);                                       // UTF-8 BOM
-        return true;
-    }
-    if (buf.size() >= 2 && (unsigned char)buf[0] == 0xFF && (unsigned char)buf[1] == 0xFE) {
+        f.enc = TextFormat::Utf8Bom;
+    } else if (buf.size() >= 2 && (unsigned char)buf[0] == 0xFF && (unsigned char)buf[1] == 0xFE) {
         std::wstring w((const wchar_t*)(buf.data() + 2), (buf.size() - 2) / 2);   // UTF-16 LE
         out = narrow(w);
-        return true;
-    }
-    if (buf.size() >= 2 && (unsigned char)buf[0] == 0xFE && (unsigned char)buf[1] == 0xFF) {
+        f.enc = TextFormat::Utf16LE;
+    } else if (buf.size() >= 2 && (unsigned char)buf[0] == 0xFE && (unsigned char)buf[1] == 0xFF) {
         std::wstring w;                                            // UTF-16 BE
         for (size_t i = 2; i + 1 < buf.size(); i += 2)
             w += (wchar_t)(((unsigned char)buf[i] << 8) | (unsigned char)buf[i + 1]);
         out = narrow(w);
-        return true;
-    }
-    // Validate as UTF-8; fall back to the system ANSI code page.
-    if (!buf.empty() &&
-        MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, buf.c_str(), (int)buf.size(), nullptr, 0) == 0) {
+        f.enc = TextFormat::Utf16BE;
+    } else if (!buf.empty() &&
+               MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, buf.c_str(), (int)buf.size(),
+                                   nullptr, 0) == 0) {
+        // Not valid UTF-8; fall back to the system ANSI code page.
         int n = MultiByteToWideChar(CP_ACP, 0, buf.c_str(), (int)buf.size(), nullptr, 0);
         std::wstring w(n, L'\0');
         MultiByteToWideChar(CP_ACP, 0, buf.c_str(), (int)buf.size(), &w[0], n);
         out = narrow(w);
-        return true;
+        f.enc = TextFormat::Ansi;
+    } else {
+        out = buf;
+        f.enc = TextFormat::Utf8;
     }
-    out = buf;
+    // Majority vote, not "any CRLF present": one pasted \r\n in an otherwise
+    // LF file must not cause a save to rewrite every line ending.
+    size_t crlfN = 0, lfN = 0;
+    for (size_t i = 0; i < out.size(); ++i) {
+        if (out[i] != '\n') continue;
+        if (i > 0 && out[i - 1] == '\r') ++crlfN; else ++lfN;
+    }
+    f.crlf = crlfN > lfN;
+    if (fmt) *fmt = f;
     return true;
 }
 
@@ -82,6 +103,53 @@ inline bool write_file_bytes(const std::wstring& path, const void* data, size_t 
     BOOL ok = size == 0 ? TRUE : WriteFile(h, data, (DWORD)size, &written, nullptr);
     CloseHandle(h);
     return ok && written == size;
+}
+
+// Write UTF-8 `text` back to disk in the shape read_file_text found it: same
+// encoding (BOM included) and CRLF line endings restored. ANSI files are
+// rewritten as UTF-8 — converting back through CP_ACP would silently corrupt
+// any character the code page can't represent. The bytes go to a temp file
+// first and then replace the target, so a failed write never truncates the
+// document.
+inline bool write_file_text(const std::wstring& path, std::string text, const TextFormat& fmt) {
+    // Normalize to \n (the editor's form), then restore \r\n if the file used it.
+    text.erase(std::remove(text.begin(), text.end(), '\r'), text.end());
+    if (fmt.crlf) {
+        std::string s;
+        s.reserve(text.size() + text.size() / 16);
+        for (char c : text) { if (c == '\n') s += '\r'; s += c; }
+        text.swap(s);
+    }
+    std::string bytes;
+    switch (fmt.enc) {
+    case TextFormat::Utf8Bom:
+        bytes = "\xEF\xBB\xBF" + text;
+        break;
+    case TextFormat::Utf16LE: {
+        std::wstring w = widen(text);
+        bytes.assign("\xFF\xFE", 2);
+        bytes.append((const char*)w.data(), w.size() * 2);
+        break;
+    }
+    case TextFormat::Utf16BE: {
+        std::wstring w = widen(text);
+        bytes.assign("\xFE\xFF", 2);
+        for (wchar_t c : w) { bytes += (char)(c >> 8); bytes += (char)(c & 0xFF); }
+        break;
+    }
+    default:                       // Utf8, and Ansi rewritten as UTF-8
+        bytes.swap(text);
+        break;
+    }
+    std::wstring tmp = path + L".mvtmp";
+    if (!write_file_bytes(tmp, bytes.data(), bytes.size())) {
+        DeleteFileW(tmp.c_str());
+        return false;
+    }
+    if (ReplaceFileW(path.c_str(), tmp.c_str(), nullptr, 0, nullptr, nullptr)) return true;
+    if (MoveFileExW(tmp.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING)) return true;
+    DeleteFileW(tmp.c_str());
+    return false;
 }
 
 inline bool file_exists(const std::wstring& path) {

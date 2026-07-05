@@ -9,7 +9,8 @@ A small native Windows Markdown viewer: a single portable `MarkdownViewer.exe`
 (Win32, C++17) that renders `.md` files with **markdown-it + highlight.js
 inside WebView2** (Edge/Chromium) — including mermaid diagrams, KaTeX math, and
 collapsible sections. Users open files via Explorer right-click,
-drag & drop, `Ctrl+O`, or the command line. An optional per-user Inno Setup
+drag & drop, `Ctrl+O`, or the command line, and can edit the open document
+in-app (`Ctrl+E` split editor with live preview, `Ctrl+S` saves). An optional per-user Inno Setup
 installer (`installer/`) wraps the exe for end users — see "Installer" below.
 
 ## Tech stack
@@ -110,9 +111,34 @@ Key points:
   the renderer can enable/disable the buttons. The renderer keys per-document
   **scroll memory** off the `path` field in the `render` message (file names
   alone collide across folders).
-- **Keyboard**: the webview owns focus, so `Ctrl+O`/`F5` are caught in
-  `add_AcceleratorKeyPressed` and posted to the main window as `WM_COMMAND`.
-  The `HACCEL` table in main.cpp only covers the rare main-window-focused case.
+- **Editing** (`Ctrl+E` / File > Edit Document): app.js owns the editor — a
+  fixed left pane with a plain `<textarea>` whose live preview on the right
+  goes through the same `renderToContent()` sanitizing pipeline as any render.
+  The host toggles it (`{type:"edit"}`), requests a save (`{type:"save"}`) and
+  acks writes (`{type:"saved", ok}`); the renderer reports `"dirty:1|0"` and
+  answers every save request with exactly one `"savedoc:<text>"` or
+  `"nosave"` — that guarantee is what completes a deferred `m_afterSave`
+  action, so never add a silent no-answer path. `App::OnSaveDoc` writes
+  **only to `m_current`** (the file the host itself opened — web content can
+  never name a path) via `fileio::write_file_text`, which restores the
+  encoding/BOM/CRLF captured at read time (`fileio::TextFormat`, ANSI is
+  rewritten as UTF-8) and replaces the file atomically (staged to a transient
+  `<doc>.mvtmp` beside the document + `ReplaceFileW`; it lives next to user
+  files, so it is deliberately outside the uninstaller's scope). Unsaved
+  changes gate every document switch — `OpenFile`/`GoBack`/`GoForward`/
+  `Reload`/`WM_CLOSE`/`WM_QUERYENDSESSION` run through `ConfirmLoseChanges`
+  (save / discard / cancel; "save" defers the action into `m_afterSave` until
+  the round-trip lands; re-entrant prompts are dropped). `OpenFile` defers the
+  prompt through `WM_APP_OPEN_PENDING` because it can be called from an OLE
+  drop or WebView2 event callback where modal UI must not run. While dirty,
+  the external-change watcher stops offering reloads (it would discard edits);
+  a save prompts before overwriting external changes (`m_sig` mismatch or a
+  declined watcher reload, tracked by `m_externallyChanged`).
+- **Keyboard**: the webview owns focus, so `Ctrl+O`/`F5`/`Ctrl+E`/`Ctrl+S` are
+  caught in `add_AcceleratorKeyPressed` and posted to the main window as
+  `WM_COMMAND` (`Ctrl+S` must be claimed there anyway or the browser's save-
+  page dialog appears). The `HACCEL` table in main.cpp only covers the rare
+  main-window-focused case.
 - **Drag & drop**: `put_AllowExternalDrop(FALSE)` stops the webview from
   handling OS drops as web content — but the runtime then registers its own
   drop target on the inner render window that *rejects* external drops (it does
@@ -166,6 +192,9 @@ Two distinct things, don't mix them up:
   out of the (privileged-feeling) app window.
 - `put_AreHostObjectsAllowed(FALSE)`; the only host↔web channel is JSON
   messages.
+- **The editor's save path writes only to `m_current`** — the file the host
+  itself opened. The `"savedoc:"` message carries text, never a destination;
+  do not add any message that lets web content choose a filesystem path.
 - Explorer integration is strictly per-user `HKCU` (no admin, easy uninstall).
 - **The update check (`update.h`) is the app's only outbound network request**,
   made over WinHTTP solely when the user clicks Help > Check for Updates. It

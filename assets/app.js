@@ -265,14 +265,25 @@
     content.innerHTML = window.DOMPurify ? window.DOMPurify.sanitize(dirty, SANITIZE_OPTS) : dirty;
   }
 
+  // The full document render pass: sanitize + inject, then the post-passes
+  // (mermaid, math). render(), rerender() and the editor's live preview all
+  // go through here so a future post-pass can't be wired into one and missed
+  // in another.
+  function renderDoc(text) {
+    renderToContent(text);
+    renderMermaid();
+    renderMath();
+  }
+
   // Re-render the current document with the current parser (keeps scroll).
+  // While the editor is open the view is a live preview of the editor's text,
+  // so use that — otherwise a settings tweak mid-edit would snap the preview
+  // back to the on-disk version.
   function rerender() {
     if (!currentName) return;
     const scroll = window.scrollY;
-    renderToContent(currentText);
+    renderDoc(editor.activeText() ?? currentText);
     window.scrollTo(0, scroll);
-    renderMermaid();
-    renderMath();
   }
 
   // Adopt a config object: style + parser + (if a doc is open) re-render.
@@ -305,10 +316,9 @@
     currentName = name;
     currentPath = path;
     currentText = text || '';
-    renderToContent(currentText);
+    renderDoc(currentText);
     window.scrollTo(0, scroll);
-    renderMermaid();
-    renderMath();
+    editor.docChanged(samePath);
   }
 
   function showWelcome() {
@@ -324,6 +334,7 @@
         <p class="tip">Tip: use <b>Tools &gt; Add to Explorer right-click menu</b> so you can
           right-click any .md file and choose <i>View with Markdown Viewer</i>.</p>
       </div>`;
+    editor.docChanged(false);
   }
 
   // ---- Settings panel ------------------------------------------------------
@@ -604,6 +615,152 @@
     return { update };
   })();
 
+  // ---- document editor (Ctrl+E) ---------------------------------------------
+  // A plain-text editor for the open document in a fixed left pane, with the
+  // live preview on the right (rendered through the same sanitizing pipeline
+  // as any document — the editor never bypasses renderToContent()). The host
+  // toggles it ({type:"edit"}), asks it to save ({type:"save"} — File > Save,
+  // or "save first" before navigating away/closing) and reports write results
+  // ({type:"saved"}). We report the unsaved-changes state with "dirty:1|0" so
+  // the host can guard navigation and close, and send the full text with
+  // "savedoc:<text>"; the host only ever writes it to the file it opened.
+  const editor = (() => {
+    const pane = document.getElementById('mv-editor');
+    const ta = document.getElementById('mv-ed-text');
+    const nameEl = document.getElementById('mv-ed-name');
+    const saveBtn = document.getElementById('mv-ed-save');
+    const closeBtn = document.getElementById('mv-ed-close');
+    const editBtn = document.getElementById('mv-edit');
+
+    let active = false;
+    let dirty = false;
+    let savedText = '';        // last text known to be on disk (LF-normalized)
+    let pendingSave = null;    // text sent in an unacked "savedoc:" message
+    let previewTimer = 0;
+
+    const post = (s) => window.chrome.webview.postMessage(s);
+    // The textarea's value is always LF; normalize the host's text to match so
+    // the dirty comparison never trips on line endings (the host restores the
+    // file's original EOLs when it writes).
+    const normalize = (t) => (t || '').replace(/\r\n?/g, '\n');
+
+    function setDirty(d) {
+      if (d === dirty) return;
+      dirty = d;
+      saveBtn.disabled = !d;
+      post('dirty:' + (d ? '1' : '0'));
+    }
+
+    // The pencil shows only in view mode with a document open.
+    function updateButton() { editBtn.hidden = active || !currentPath; }
+
+    // Re-render the preview from the editor text. currentText only advances on
+    // save, so closing the editor without saving reverts the view.
+    function preview() {
+      renderDoc(ta.value);
+    }
+
+    function onInput() {
+      // Length check first: skip the O(doc) comparison on most keystrokes.
+      setDirty(ta.value.length !== savedText.length || ta.value !== savedText);
+      clearTimeout(previewTimer);
+      previewTimer = setTimeout(preview, 250);
+    }
+
+    // Load the current document's text into the editor controls (used both on
+    // entering the editor and when a same-document reload arrives).
+    function loadDoc() {
+      savedText = normalize(currentText);
+      ta.value = savedText;
+      nameEl.textContent = currentName;
+      setDirty(false);
+    }
+
+    function enter() {
+      if (active || !currentPath) return;
+      active = true;
+      loadDoc();
+      pane.hidden = false;
+      document.body.classList.add('mv-editing');
+      updateButton();
+      ta.focus();
+    }
+
+    // Leave edit mode. Unsaved changes need a confirm, except when the host
+    // has already resolved them (save/discard prompt) — the `force` case.
+    function exit(force) {
+      if (!active) return;
+      if (dirty && !force && !window.confirm('Discard unsaved changes?')) return;
+      const revert = dirty && !force;
+      active = false;
+      clearTimeout(previewTimer);
+      setDirty(false);
+      pane.hidden = true;
+      document.body.classList.remove('mv-editing');
+      updateButton();
+      if (revert) rerender();          // put the saved text back in the view
+    }
+
+    function toggle() { active ? exit(false) : enter(); }
+
+    // Every {type:"save"} request gets exactly one answer — "savedoc:" with
+    // the text, or "nosave" when there is nothing to write (editor closed, or
+    // the text matches the file). The host may be holding a deferred action
+    // (navigate / close window) that waits on that answer, so never go silent.
+    function save() {
+      if (active && dirty) {
+        pendingSave = ta.value;
+        post('savedoc:' + pendingSave);
+      } else {
+        post('nosave');
+      }
+    }
+
+    // Host: the write finished. On success the text we POSTED (not ta.value —
+    // the user may have kept typing during the round-trip) becomes the
+    // document text; if the editor was closed meanwhile, refresh the view so
+    // it shows what is now on disk.
+    function onSaved(ok) {
+      const saved = pendingSave;
+      pendingSave = null;
+      if (!ok || saved === null) return;
+      savedText = saved;
+      currentText = saved;
+      setDirty(active && ta.value !== savedText);
+      if (!active) rerender();
+    }
+
+    // A render/welcome message arrived. The host resolves unsaved changes
+    // before navigating, so adopt the new text: stay in the editor on a
+    // same-document reload (F5), close it when the document changes.
+    function docChanged(samePath) {
+      if (active) {
+        if (samePath) loadDoc();
+        else          exit(true);
+      }
+      updateButton();
+    }
+
+    // The live text backing the preview, or null when the editor is closed
+    // (rerender() falls back to the saved document text).
+    const activeText = () => (active ? ta.value : null);
+
+    editBtn.addEventListener('click', enter);
+    closeBtn.addEventListener('click', () => exit(false));
+    saveBtn.addEventListener('click', save);
+    ta.addEventListener('input', onInput);
+    // Tab indents (two spaces) instead of leaving the textarea; execCommand
+    // keeps the edit on the native undo stack.
+    ta.addEventListener('keydown', (e) => {
+      if (e.key === 'Tab' && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+        e.preventDefault();
+        document.execCommand('insertText', false, '  ');
+      }
+    });
+
+    return { toggle, save, onSaved, docChanged, activeText };
+  })();
+
   window.chrome.webview.addEventListener('message', (e) => {
     const m = e.data;
     if (!m || typeof m !== 'object') return;
@@ -614,6 +771,9 @@
       case 'settings': settings.open(); break;
       case 'nav':      applyNavState(m.canBack, m.canForward); break;
       case 'files':    sidebar.update(m.files || [], typeof m.current === 'number' ? m.current : -1); break;
+      case 'edit':     editor.toggle(); break;
+      case 'save':     editor.save(); break;
+      case 'saved':    editor.onSaved(!!m.ok); break;
     }
   });
 

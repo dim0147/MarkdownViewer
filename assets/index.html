@@ -60,6 +60,24 @@
 <button id="mv-sb-show" class="mv-sb-show" type="button" hidden title="Show files" aria-label="Show files">
   <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M6.22 3.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L9.94 8 6.22 4.28a.75.75 0 0 1 0-1.06Z"/></svg>
 </button>
+<!-- Floating edit toggle (top-right): shown while a document is open, hidden
+     during editing (the editor header takes over). Enters edit mode. -->
+<button id="mv-edit" class="mv-edit-btn" type="button" hidden title="Edit (Ctrl+E)" aria-label="Edit document">
+  <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M11.013 1.427a1.75 1.75 0 0 1 2.474 0l1.086 1.086a1.75 1.75 0 0 1 0 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 0 1-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61Zm.176 4.823L9.75 4.81l-6.286 6.287a.253.253 0 0 0-.064.108l-.558 1.953 1.953-.558a.253.253 0 0 0 .108-.064Zm1.238-3.763a.25.25 0 0 0-.354 0L10.811 3.75l1.439 1.44 1.263-1.263a.25.25 0 0 0 0-.354Z"/></svg>
+</button>
+<!-- Edit mode (Ctrl+E): a fixed left pane holding a plain-text editor; the
+     content column on the right becomes the live (still DOMPurify-sanitized)
+     preview. app.js owns all editor state; the host only ever receives the
+     final text ("savedoc:") and writes it to the file it itself opened. -->
+<div id="mv-editor" hidden>
+  <div class="mv-ed-header">
+    <span id="mv-ed-name" class="mv-ed-name"></span>
+    <span class="mv-spacer"></span>
+    <button id="mv-ed-save" class="mv-btn mv-btn-primary mv-ed-btn" type="button" title="Save (Ctrl+S)" disabled>Save</button>
+    <button id="mv-ed-close" class="mv-btn mv-ed-btn" type="button" title="Close editor (Ctrl+E)">Close</button>
+  </div>
+  <textarea id="mv-ed-text" spellcheck="false" autocomplete="off" autocapitalize="off" wrap="soft" aria-label="Markdown source"></textarea>
+</div>
 <main id="content" class="markdown-body"></main>
 <script src="https://viewer.assets/vendor/markdown-it.min.js"></script>
 <script src="https://viewer.assets/vendor/markdown-it-task-lists.min.js"></script>

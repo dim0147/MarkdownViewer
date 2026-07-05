@@ -208,10 +208,13 @@ body.mv-sb-collapsed #mv-nav { left: 52px; }   /* clear the floating show button
 }
 .mv-sb-resize:hover { background: var(--accent); opacity: .35; }
 
-.mv-sb-show {
+/* Shared floating-chrome-button look: the collapsed-sidebar show button (top
+   left) and the edit pencil (.mv-edit-btn, top right — see the edit-mode
+   section). Only the corner they pin to differs. */
+.mv-sb-show,
+.mv-edit-btn {
   position: fixed;
   top: 10px;
-  left: 10px;
   z-index: 960;
   display: inline-flex;
   align-items: center;
@@ -227,8 +230,77 @@ body.mv-sb-collapsed #mv-nav { left: 52px; }   /* clear the floating show button
   backdrop-filter: blur(6px);
   cursor: pointer;
 }
-.mv-sb-show:hover { background: rgba(128, 128, 128, .18); }
-.mv-sb-show[hidden] { display: none; }
+.mv-sb-show { left: 10px; }
+.mv-sb-show:hover, .mv-edit-btn:hover { background: rgba(128, 128, 128, .18); }
+.mv-sb-show[hidden], .mv-edit-btn[hidden] { display: none; }
+
+/* ----- edit mode (#mv-editor + #mv-edit, Ctrl+E, driven by app.js) -----
+   A fixed pane down the left half holding a plain-text markdown editor; the
+   content column on the right becomes the live preview (body.mv-editing pads
+   it over). The sidebar and the floating toolbars get out of the way while
+   editing. The pencil toggle (#mv-edit) floats top-right while a document is
+   open; its chrome is shared with .mv-sb-show (see the sidebar section). */
+.mv-edit-btn { right: 14px; }
+
+#mv-editor {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 50vw;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  border-right: 1px solid var(--border);
+  z-index: 940;
+  color: var(--panel-fg);
+  font: 14px -apple-system, "Segoe UI", system-ui, sans-serif;
+}
+#mv-editor[hidden] { display: none; }
+
+.mv-ed-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--sidebar-bg);
+}
+.mv-ed-name {
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mv-ed-btn { padding: 5px 12px; font-size: 13px; }
+.mv-btn:disabled { opacity: .45; cursor: default; }
+.mv-btn:disabled:hover { border-color: var(--border); filter: none; }
+
+#mv-ed-text {
+  flex: 1;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 16px 18px;
+  border: none;
+  outline: none;
+  resize: none;
+  background: var(--bg);
+  color: inherit;
+  font: 13.5px/1.6 Consolas, "Cascadia Mono", monospace;
+  tab-size: 4;
+}
+
+/* Preview takes the right half; chrome that would overlap the editor hides.
+   (Placed after the sidebar rules so mv-editing wins the padding-left.) */
+body.mv-editing { padding-left: 50vw; }
+body.mv-editing #mv-sidebar,
+body.mv-editing .mv-sb-show,
+body.mv-editing #mv-nav,
+body.mv-editing .mv-edit-btn { display: none; }
 
 /* ----- mermaid diagrams (```mermaid fenced blocks, rendered by app.js) ----- */
 /* A clipped viewport: app.js pans/zooms by re-aiming the SVG's viewBox (not a

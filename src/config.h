@@ -8,7 +8,7 @@
 namespace cfg {
 
 constexpr wchar_t kAppTitle[]    = L"Markdown Viewer";
-constexpr wchar_t kAppVersion[]  = L"2.7.2";
+constexpr wchar_t kAppVersion[]  = L"2.8.0";
 constexpr wchar_t kWindowClass[] = L"MarkdownViewerWnd";
 constexpr wchar_t kAppDirName[]  = L"MarkdownViewer";   // folder name under %APPDATA% / %LOCALAPPDATA%
 
@@ -52,6 +52,8 @@ enum : UINT {
     ID_OPEN        = 101,
     ID_RELOAD      = 102,
     ID_EXIT        = 103,
+    ID_EDIT        = 104,
+    ID_SAVE        = 105,
     ID_INSTALL     = 201,
     ID_UNINSTALL   = 202,
     ID_OPENCONFIG  = 203,
@@ -68,5 +70,10 @@ enum : UINT {
 // update check finishes; lParam is a heap-allocated update::Result* that the
 // handler takes ownership of and must delete.
 constexpr UINT WM_APP_UPDATE_RESULT = WM_APP + 1;
+
+// Posted by App::OpenFile when unsaved editor changes require a prompt: the
+// caller may be an OLE drop callback or a WebView2 event handler, where a
+// modal MessageBox must not run. The handler picks up App::m_pendingOpen.
+constexpr UINT WM_APP_OPEN_PENDING = WM_APP + 2;
 
 } // namespace cfg

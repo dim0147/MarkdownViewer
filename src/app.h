@@ -8,10 +8,16 @@
 //   { type: "welcome" }
 //   { type: "nav",     canBack: <bool>, canForward: <bool> }
 //   { type: "files",   files: ["a.md", ...], current: <index | -1> }
+//   { type: "edit" }                    - toggle the document editor (Ctrl+E)
+//   { type: "save" }                    - ask the editor to post its text back
+//   { type: "saved",   ok: <bool> }     - result of writing that text to disk
 //
 // app.js answers with the string "ready" once loaded ("back"/"forward" from the
-// history toolbar; "openfile:<i>"/"reloadfiles" from the file sidebar); any file
-// opened before "ready" is queued in m_current and rendered from OnWebReady().
+// history toolbar; "openfile:<i>"/"reloadfiles" from the file sidebar;
+// "savedoc:<text>"/"nosave"/"dirty:<0|1>" from the editor — every {type:"save"}
+// gets exactly one "savedoc:" or "nosave" answer, which is what completes a
+// deferred m_afterSave action); any file opened before "ready" is queued in
+// m_current and rendered from OnWebReady().
 
 #include <windows.h>
 #include <commdlg.h>
@@ -43,6 +49,9 @@ public:
         m_web.onForward    = [this]() { GoForward(); };
         m_web.onOpenSibling   = [this](int i) { OpenSibling(i); };
         m_web.onRefreshFiles  = [this]() { SendFiles(); };
+        m_web.onSaveDoc    = [this](const std::wstring& text) { OnSaveDoc(text); };
+        m_web.onNoSave     = [this]() { OnNoSave(); };
+        m_web.onDirty      = [this](bool d) { OnDirty(d); };
         m_web.onFailed     = [this](const std::wstring& msg) {
             MessageBoxW(m_hwnd, msg.c_str(), cfg::kAppTitle, MB_OK | MB_ICONERROR);
         };
@@ -58,24 +67,70 @@ public:
     // Open a file as a *fresh* navigation: it joins the MRU list and is pushed
     // onto the back/forward history (any forward entries are discarded, like a
     // web browser). Reached from the command line, drag & drop, File > Open,
-    // Open Recent, and clicks on in-document .md links.
+    // Open Recent, and clicks on in-document .md links. Unsaved editor changes
+    // are resolved first (save / discard / cancel) — but never inline: this can
+    // be called from an OLE drop callback or a WebView2 event handler, where a
+    // modal MessageBox blocks the drag source / risks re-entrancy, so the
+    // prompt is deferred through the message queue (WM_APP_OPEN_PENDING).
     void OpenFile(const std::wstring& path) {
-        recent::add(path);
-        RefreshRecentMenu();
-        PushHistory(path);
-        Show(path);
+        if (m_docDirty) {
+            m_pendingOpen = path;
+            PostMessageW(m_hwnd, cfg::WM_APP_OPEN_PENDING, 0, 0);
+            return;
+        }
+        DoOpenFile(path);
+    }
+
+    // WM_APP_OPEN_PENDING: run the save/discard/cancel prompt from the message
+    // loop (a safe context) and open the file the prompt allows through.
+    void OnPendingOpen() {
+        std::wstring path;
+        path.swap(m_pendingOpen);
+        if (path.empty()) return;
+        ConfirmLoseChanges([this, path]() { DoOpenFile(path); });
     }
 
     // Alt+Left / the toolbar's Back button: revisit the previous document.
     void GoBack() {
-        if (m_historyIndex > 0) { --m_historyIndex; Show(m_history[m_historyIndex]); }
+        if (m_historyIndex <= 0) return;
+        ConfirmLoseChanges([this]() {
+            if (m_historyIndex > 0) { --m_historyIndex; Show(m_history[m_historyIndex]); }
+        });
     }
 
     // Alt+Right / the toolbar's Forward button: revisit a document we came back
     // from.
     void GoForward() {
-        if (m_historyIndex + 1 < (int)m_history.size()) { ++m_historyIndex; Show(m_history[m_historyIndex]); }
+        if (m_historyIndex + 1 >= (int)m_history.size()) return;
+        ConfirmLoseChanges([this]() {
+            if (m_historyIndex + 1 < (int)m_history.size()) { ++m_historyIndex; Show(m_history[m_historyIndex]); }
+        });
     }
+
+    // Ctrl+E / File > Edit Document: toggle the renderer's editor pane for the
+    // open document (the editor lives entirely in app.js; this just flips it).
+    void ToggleEdit() {
+        if (m_ready && !m_current.empty()) m_web.PostJson(L"{\"type\":\"edit\"}");
+    }
+
+    // Ctrl+S / File > Save: ask the editor to post its current text back
+    // ("savedoc:<text>"), which OnSaveDoc() writes to disk. A no-op in app.js
+    // when the editor is closed or the text is unchanged.
+    void RequestSave() {
+        if (m_ready) m_web.PostJson(L"{\"type\":\"save\"}");
+    }
+
+    // WM_CLOSE: quit, but let unsaved editor changes be saved/discarded first
+    // (Cancel keeps the window open).
+    void RequestClose() {
+        ConfirmLoseChanges([this]() { DestroyWindow(m_hwnd); });
+    }
+
+    // WM_QUERYENDSESSION: logoff/shutdown bypasses WM_CLOSE, so unsaved edits
+    // would be destroyed with no prompt. Block the session end the sanctioned
+    // way (a shutdown reason Windows shows the user) instead of popping a
+    // modal dialog into the shutdown sequence.
+    bool IsDirty() const { return m_docDirty; }
 
     // File sidebar click: open the index-th file from the list we last sent the
     // renderer. We open by index into our own list (never a path supplied by the
@@ -133,6 +188,7 @@ public:
     void ShowWelcome() {
         m_current.clear();
         m_externallyChanged = false;
+        m_docDirty = false;
         m_sig = fileio::FileSig{};
         SetWindowTextW(m_hwnd, cfg::kAppTitle);
         if (m_ready) { SendWelcome(); SendFiles(); }
@@ -141,13 +197,17 @@ public:
     // F5 / File > Reload: re-read config.json (so settings edits apply live)
     // and the document. SendRender() re-captures the on-disk signature and
     // clears any pending "changed on disk" flag, so this also dismisses the
-    // '*' title marker.
+    // '*' title marker. The config re-read is unconditional (it never touches
+    // the editor's text); only the document reload — which replaces that text
+    // — waits on the unsaved-changes prompt.
     void Reload() {
         if (!m_ready) return;
         SendConfig();
-        if (!m_current.empty()) SendRender();
-        else                    SendWelcome();
-        SendFiles();               // pick up files added/removed in the folder
+        ConfirmLoseChanges([this]() {
+            if (!m_current.empty()) SendRender();
+            else                    SendWelcome();
+            SendFiles();           // pick up files added/removed in the folder
+        });
     }
 
     // WM_TIMER: has the open document changed on disk since we rendered it? If
@@ -158,6 +218,15 @@ public:
         if (!now.valid) return;            // missing or mid-write — ignore this tick
         if (!m_sig.valid) { m_sig = now; return; }
         if (now == m_sig) return;          // unchanged
+        // While the user has unsaved edits, offering "reload?" would throw
+        // them away — just flag the conflict in the title. m_sig is left
+        // pointing at the version we read, so OnSaveDoc() still detects the
+        // external change and asks before overwriting it.
+        if (m_docDirty) {
+            m_externallyChanged = true;
+            UpdateTitle();
+            return;
+        }
         // Adopt the new signature up front so we prompt exactly once per change
         // (even if the user dismisses the dialog, the next tick stays quiet).
         m_sig = now;
@@ -250,6 +319,28 @@ private:
     bool            m_externallyChanged = false;
     bool            m_changePromptOpen  = false;
 
+    // Document editor state: the on-disk format captured when m_current was
+    // read (so a save writes the same encoding/EOLs back), whether the editor
+    // holds unsaved changes (mirrors app.js's "dirty:" messages; gates
+    // navigation/close and drives the '*' title marker), an action to run once
+    // a requested save round-trip completes (e.g. "save, then open the next
+    // file"), a guard so lose-changes prompts never nest (MessageBox pumps the
+    // queue, so a drop/menu command can arrive mid-prompt), and the path a
+    // dirty-time OpenFile parked for WM_APP_OPEN_PENDING.
+    fileio::TextFormat    m_fmt;
+    bool                  m_docDirty = false;
+    std::function<void()> m_afterSave;
+    bool                  m_confirmOpen = false;
+    std::wstring          m_pendingOpen;
+
+    // The non-gated tail of OpenFile (see OpenFile for the deferral story).
+    void DoOpenFile(const std::wstring& path) {
+        recent::add(path);
+        RefreshRecentMenu();
+        PushHistory(path);
+        Show(path);
+    }
+
     // Back/forward history: visited file paths oldest->newest, with m_historyIndex
     // pointing at the current document. Opening a file truncates any forward
     // entries (browser semantics); the renderer's scroll memory is keyed off the
@@ -282,15 +373,95 @@ private:
         if (m_ready) { SendRender(); SendNavState(); SendFiles(); }
     }
 
-    // Window title: "[*]name - Markdown Viewer", where the leading '*' flags a
-    // document that has changed on disk but not yet been reloaded.
+    // Window title: "[*]name - Markdown Viewer", where the leading '*' flags
+    // unsaved editor changes or a document that has changed on disk but not
+    // yet been reloaded.
     void UpdateTitle() {
         if (m_current.empty()) { SetWindowTextW(m_hwnd, cfg::kAppTitle); return; }
         std::wstring dir, name;
         fileio::split_path(m_current, dir, name);
-        std::wstring title = (m_externallyChanged ? L"*" : L"") + name +
+        std::wstring title = (m_docDirty || m_externallyChanged ? L"*" : L"") + name +
                              L" - " + cfg::kAppTitle;
         SetWindowTextW(m_hwnd, title.c_str());
+    }
+
+    // Run `then` immediately unless the editor has unsaved changes, in which
+    // case ask: Yes saves first (then runs after the save round-trip through
+    // app.js completes), No discards, Cancel drops the action. While a prompt
+    // is up or a save round-trip is pending, further requests are dropped —
+    // MessageBox pumps the message queue, so without the guard a second drop
+    // or menu command would nest a second prompt and overwrite m_afterSave.
+    void ConfirmLoseChanges(std::function<void()> then) {
+        if (!m_docDirty) { then(); return; }
+        if (m_confirmOpen || m_afterSave) return;
+        std::wstring dir, name;
+        fileio::split_path(m_current, dir, name);
+        m_confirmOpen = true;
+        int r = MessageBoxW(m_hwnd, (L"Save changes to " + name + L"?").c_str(),
+                            cfg::kAppTitle, MB_YESNOCANCEL | MB_ICONWARNING);
+        m_confirmOpen = false;
+        if (r == IDYES) {
+            m_afterSave = std::move(then);
+            RequestSave();         // answered by exactly one "savedoc:" or "nosave"
+        } else if (r == IDNO) {
+            m_docDirty = false;    // app.js resets its own state on the next render
+            UpdateTitle();
+            then();
+        }
+    }
+
+    // app.js -> host "dirty:" message: the editor gained/lost unsaved changes.
+    void OnDirty(bool dirty) {
+        m_docDirty = dirty;
+        UpdateTitle();
+    }
+
+    // app.js -> host "savedoc:" message: write the editor's text back to the
+    // document. The destination is always m_current — the file the host itself
+    // opened — so web content can never direct a write anywhere else. Any
+    // deferred action is taken out of its slot up front (single clearing
+    // point) and runs only if the write actually happens.
+    void OnSaveDoc(const std::wstring& text) {
+        std::function<void()> after = std::move(m_afterSave);
+        m_afterSave = nullptr;
+        if (m_current.empty()) return;
+        // The file changed on disk since we read it: overwriting would lose
+        // someone else's edits. m_externallyChanged covers the case where the
+        // watcher's reload prompt was declined (it adopts the new signature to
+        // avoid re-prompting, so the sig comparison alone would miss it).
+        fileio::FileSig now = fileio::file_signature(m_current);
+        if ((now.valid && m_sig.valid && now != m_sig) || m_externallyChanged) {
+            std::wstring dir, name;
+            fileio::split_path(m_current, dir, name);
+            if (MessageBoxW(m_hwnd,
+                            (name + L" has changed on disk since you started editing.\n\n"
+                             L"Overwrite it with your version?").c_str(),
+                            cfg::kAppTitle, MB_YESNO | MB_ICONWARNING) != IDYES)
+                return;
+        }
+        if (fileio::write_file_text(m_current, fileio::narrow(text), m_fmt)) {
+            m_sig = fileio::file_signature(m_current);
+            m_docDirty = false;
+            m_externallyChanged = false;
+            UpdateTitle();
+            m_web.PostJson(L"{\"type\":\"saved\",\"ok\":true}");
+            if (after) after();
+        } else {
+            m_web.PostJson(L"{\"type\":\"saved\",\"ok\":false}");
+            MessageBoxW(m_hwnd, (L"Could not save the file:\n" + m_current).c_str(),
+                        cfg::kAppTitle, MB_OK | MB_ICONERROR);
+        }
+    }
+
+    // app.js -> host "nosave": the editor answered a save request with
+    // "nothing to write" (it was closed, or the text matches the file again).
+    // Whatever waited on the save can proceed — the document is not dirty.
+    void OnNoSave() {
+        std::function<void()> after = std::move(m_afterSave);
+        m_afterSave = nullptr;
+        m_docDirty = false;
+        UpdateTitle();
+        if (after) after();
     }
 
     // Build a menu label for the i-th recent file: an "&1".."&9","&0" mnemonic
@@ -376,9 +547,15 @@ private:
 
     void SendRender() {
         std::string text;
-        if (!fileio::read_file_text(m_current, text)) {
+        if (!fileio::read_file_text(m_current, text, &m_fmt)) {
             MessageBoxW(m_hwnd, (L"Could not open file:\n" + m_current).c_str(), cfg::kAppTitle,
                         MB_OK | MB_ICONERROR);
+            // Fall back to a consistent empty state instead of returning with
+            // m_current pointing at the unreadable file while the renderer
+            // still shows (and may be editing) the previous document — in that
+            // split state a later Ctrl+S would write the OLD document's text
+            // to the NEW path.
+            ShowWelcome();
             return;
         }
         // The displayed content now matches what's on disk: capture its
