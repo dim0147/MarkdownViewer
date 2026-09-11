@@ -203,13 +203,20 @@ public:
 
     // Map https://viewer.doc/ to the directory of the current document so its
     // relative links and images resolve.
-    void SetDocDir(const std::wstring& dir) {
-        if (!m_webview3 || dir == m_docDir) return;
-        m_docDir = dir;
+    HRESULT SetDocDir(const std::wstring& dir) {
+        if (!m_webview3) return E_NOINTERFACE;
+        if (dir == m_docDir) return S_FALSE;
         m_webview3->ClearVirtualHostNameToFolderMapping(cfg::kDocHost);
-        m_webview3->SetVirtualHostNameToFolderMapping(
+        HRESULT hr = m_webview3->SetVirtualHostNameToFolderMapping(
             cfg::kDocHost, dir.c_str(), COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_DENY_CORS);
+        if (SUCCEEDED(hr)) m_docDir = dir;
+        else m_docDir.clear();
+        return hr;
     }
+
+    // Existing page resource loaders may retain the previous folder mapping.
+    // Wait for the new page's "ready" message before sending document HTML.
+    HRESULT ReloadPage() { return m_webview ? m_webview->Reload() : E_FAIL; }
 
     const std::wstring& DocDir() const { return m_docDir; }
 

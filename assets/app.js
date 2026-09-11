@@ -41,6 +41,17 @@
   // Per-document scroll memory, keyed by the path the host sends. Updated when
   // we leave a doc (navigate away) so Back/Forward returns to where you were.
   const scrollPos = new Map();
+  // Folder changes reload the shell to refresh WebView2's resource mapping.
+  // Keep per-document scroll history across those reloads within this window.
+  try {
+    for (const [path, y] of JSON.parse(sessionStorage.getItem('mv-scroll') || '[]'))
+      if (typeof path === 'string' && Number.isFinite(y)) scrollPos.set(path, y);
+  } catch (_) { /* Storage is optional. */ }
+  window.addEventListener('pagehide', () => {
+    if (currentPath) scrollPos.set(currentPath, window.scrollY);
+    try { sessionStorage.setItem('mv-scroll', JSON.stringify([...scrollPos])); }
+    catch (_) { /* Storage is optional. */ }
+  });
 
   // Build the markdown-it parser from a config object.
   function buildParser(c) {
@@ -262,7 +273,20 @@
   // through here. renderMermaid()/renderMath() run AFTER, on the sanitized DOM.
   function renderToContent(text) {
     const dirty = md.render(text || '');
-    content.innerHTML = window.DOMPurify ? window.DOMPurify.sanitize(dirty, SANITIZE_OPTS) : dirty;
+    const fragment = document.createElement('template');
+    fragment.innerHTML = window.DOMPurify ? window.DOMPurify.sanitize(dirty, SANITIZE_OPTS) : dirty;
+    // The virtual host is reused across folders. Give each document its own
+    // image cache key, before insertion starts any image requests.
+    for (const img of fragment.content.querySelectorAll('img[src]')) {
+      try {
+        const url = new URL(img.getAttribute('src'), document.baseURI);
+        if (url.origin === 'https://viewer.doc') {
+          url.searchParams.set('__mv_doc', currentPath);
+          img.setAttribute('src', url.href);
+        }
+      } catch (_) { /* Leave malformed URLs for the browser to reject. */ }
+    }
+    content.replaceChildren(fragment.content);
   }
 
   // The full document render pass: sanitize + inject, then the post-passes

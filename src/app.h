@@ -497,6 +497,7 @@ private:
     // Tell the renderer whether Back/Forward are currently possible so it can
     // enable/disable (and show/hide) the history toolbar.
     void SendNavState() {
+        if (!m_ready) return;
         bool back = m_historyIndex > 0;
         bool fwd  = m_historyIndex + 1 < (int)m_history.size();
         std::string json = std::string("{\"type\":\"nav\",\"canBack\":") +
@@ -566,7 +567,23 @@ private:
         UpdateTitle();
         std::wstring dir, name;
         fileio::split_path(m_current, dir, name);
-        m_web.SetDocDir(dir);
+        HRESULT mapped = m_web.SetDocDir(dir);
+        if (FAILED(mapped)) {
+            MessageBoxW(m_hwnd, L"Could not map the document folder.", cfg::kAppTitle,
+                        MB_OK | MB_ICONERROR);
+            ShowWelcome();
+            return;
+        }
+        if (mapped == S_OK) {
+            m_ready = false;
+            if (FAILED(m_web.ReloadPage())) {
+                m_ready = true;
+                MessageBoxW(m_hwnd, L"Could not reload the viewer page.", cfg::kAppTitle,
+                            MB_OK | MB_ICONERROR);
+                ShowWelcome();
+            }
+            return; // OnWebReady re-sends config, document, history and sidebar.
+        }
         // `path` is the renderer's stable key for per-document scroll memory
         // (file names alone collide across folders); `name` is the display title.
         std::string json = "{\"type\":\"render\",\"name\":\"" +

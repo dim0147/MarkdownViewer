@@ -8,7 +8,7 @@
 namespace cfg {
 
 constexpr wchar_t kAppTitle[]    = L"Markdown Viewer";
-constexpr wchar_t kAppVersion[]  = L"2.8.0";
+constexpr wchar_t kAppVersion[]  = L"2.8.1";
 constexpr wchar_t kWindowClass[] = L"MarkdownViewerWnd";
 constexpr wchar_t kAppDirName[]  = L"MarkdownViewer";   // folder name under %APPDATA% / %LOCALAPPDATA%
 

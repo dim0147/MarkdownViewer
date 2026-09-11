@@ -95,6 +95,11 @@ Key points:
   - `viewer.doc` → folder of the current document, remapped on every file open
     so relative images/links resolve (`<base href="https://viewer.doc/">` in
     index.html).
+    After changing the mapping, reload the shell and wait for its `ready`
+    message before rendering: existing WebView2 resource loaders can retain
+    the old mapping. Scroll history survives the reload in sessionStorage.
+    Local image URLs carry a document-specific query key to prevent cached
+    images from a different folder being reused at the same virtual URL.
 - **Navigation policy** (`WebViewHost::HandleNavigation`): the webview is only
   ever allowed to display `viewer.assets/*`. Clicks on `.md` links under
   `viewer.doc` reopen in the viewer — but only after URL-decoding,
