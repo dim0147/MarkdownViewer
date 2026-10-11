@@ -5,7 +5,7 @@
 // %APPDATA%\MarkdownViewer\recent.txt. It lives alongside config.json so the
 // installer's existing %APPDATA%\MarkdownViewer cleanup removes it on uninstall
 // (no extra footprint to track). The C++ side owns this list; the menu in
-// main.cpp / app.h renders it.
+// main.cpp / app.h and the welcome screen render it.
 
 #include <windows.h>
 #include <string>

@@ -126,6 +126,12 @@ Key points:
   also reuse the window before WebView2 is ready. Paths compare case-insensitively
   after resolving relative paths and `.`/`..`. Opening the current file in the
   same window only focuses it; use F5 to explicitly reload.
+- **Homepage recent files** reuse `recent.txt` (newest first). `SendRecent`
+  posts names and full paths as a `{type:"recent"}` message. The homepage uses
+  text-only DOM buttons and sends `"openrecent:<i>"`; `App` resolves the index
+  against the snapshot it last displayed, so another window reordering the
+  persisted list cannot change which file a click opens. Clearing recent files
+  updates the homepage too; missing files follow the menu's removal/warning flow.
 - **Code-block copying** is added after sanitized rendering in `renderDoc()`:
   `addCodeCopyButton` wraps each remaining `pre > code`, keeps the button outside
   horizontal scrolling, and copies `code.textContent` (preserving whitespace).
@@ -234,7 +240,8 @@ into `third_party/` on first build. `res/icon.ico` is generated on first build.
 
 After building, run `node test/relative-images.mjs` and
 `node test/copy-and-reopen.mjs` for real WebView2 rendering, clipboard, and
-native window-reuse checks. Also run `MarkdownViewer.exe test\sample.md`,
+native window-reuse checks. Run `node test/recent-homepage.mjs` for homepage
+recent-file display, clearing, and mouse/keyboard opening checks. Also run `MarkdownViewer.exe test\sample.md`,
 and eyeball the output (headings, task
 checkboxes, highlighted C++ block, table alignment, dark mode if the OS is
 dark). Update `test/sample.md` when adding renderer features. After touching

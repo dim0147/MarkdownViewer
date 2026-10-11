@@ -423,10 +423,34 @@
         <h1>Markdown Viewer</h1>
         <div class="drop"><b>Drag &amp; drop</b> a .md file here<br><br>
           or press <kbd>Ctrl</kbd>+<kbd>O</kbd> to browse</div>
+        <section class="mv-recent" aria-labelledby="mv-recent-title">
+          <h2 id="mv-recent-title">Recent files</h2>
+          <ul id="mv-recent-list"></ul>
+          <p id="mv-recent-empty">No recent files yet.</p>
+        </section>
         <p class="tip">Tip: use <b>Tools &gt; Add to Explorer right-click menu</b> so you can
           right-click any .md file and choose <i>View with Markdown Viewer</i>.</p>
       </div>`;
     editor.docChanged(false);
+  }
+
+  function showRecent(files) {
+    const list = document.getElementById('mv-recent-list');
+    if (!list) return;
+    list.replaceChildren();
+    files.forEach((file, i) => {
+      const item = el('li');
+      const button = el('button', 'mv-recent-file');
+      button.type = 'button';
+      button.title = file.path;
+      // Paths are text, never HTML or navigation URLs.
+      button.append(el('span', 'mv-recent-name', { text: file.name }),
+                    el('span', 'mv-recent-path', { text: file.path }));
+      button.addEventListener('click', () => window.chrome.webview.postMessage('openrecent:' + i));
+      item.append(button);
+      list.append(item);
+    });
+    document.getElementById('mv-recent-empty').hidden = files.length > 0;
   }
 
   // ---- Settings panel ------------------------------------------------------
@@ -860,6 +884,7 @@
       case 'config':   applyConfig(m.config); break;
       case 'render':   render(m.markdown, m.name, m.path); break;
       case 'welcome':  showWelcome(); break;
+      case 'recent':   showRecent(m.files || []); break;
       case 'settings': settings.open(); break;
       case 'nav':      applyNavState(m.canBack, m.canForward); break;
       case 'files':    sidebar.update(m.files || [], typeof m.current === 'number' ? m.current : -1); break;

@@ -65,6 +65,8 @@ portable.
   or pass a file on the command line
 - **Reuse open documents** — reopening the same file brings its existing viewer
   to the front, preserving scroll position and unsaved edits
+- **Recent files on the homepage** — click a file to reopen it; full paths help
+  distinguish files with the same name
 - `F5` reloads the file *and* your settings (handy while editing)
 - Clicking a relative `.md` link opens it in the viewer; external links open
   in your default browser

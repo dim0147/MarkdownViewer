@@ -6,6 +6,7 @@
 //   { type: "config",  config: "<raw config.json text>" }
 //   { type: "render",  name: "file.md", path: "<full path>", markdown: "<source>" }
 //   { type: "welcome" }
+//   { type: "recent",  files: [{name: "file.md", path: "<full path>"}, ...] }
 //   { type: "nav",     canBack: <bool>, canForward: <bool> }
 //   { type: "files",   files: ["a.md", ...], current: <index | -1> }
 //   { type: "edit" }                    - toggle the document editor (Ctrl+E)
@@ -14,6 +15,7 @@
 //
 // app.js answers with the string "ready" once loaded ("back"/"forward" from the
 // history toolbar; "openfile:<i>"/"reloadfiles" from the file sidebar;
+// "openrecent:<i>" from the welcome screen;
 // "savedoc:<text>"/"nosave"/"dirty:<0|1>" from the editor — every {type:"save"}
 // gets exactly one "savedoc:" or "nosave" answer, which is what completes a
 // deferred m_afterSave action); any file opened before "ready" is queued in
@@ -49,6 +51,10 @@ public:
         m_web.onBack       = [this]() { GoBack(); };
         m_web.onForward    = [this]() { GoForward(); };
         m_web.onOpenSibling   = [this](int i) { OpenSibling(i); };
+        m_web.onOpenRecent    = [this](int i) {
+            if (!m_current.empty() || i < 0 || (size_t)i >= m_welcomeRecent.size()) return;
+            OpenRecentPath(m_welcomeRecent[i]);
+        };
         m_web.onRefreshFiles  = [this]() { SendFiles(); };
         m_web.onSaveDoc    = [this](const std::wstring& text) { OnSaveDoc(text); };
         m_web.onNoSave     = [this]() { OnNoSave(); };
@@ -156,6 +162,7 @@ public:
     void SetRecentMenu(HMENU h) { m_recentMenu = h; RefreshRecentMenu(); }
 
     void RefreshRecentMenu() {
+        if (m_ready && m_current.empty()) SendRecent();
         if (!m_recentMenu) return;
         while (GetMenuItemCount(m_recentMenu) > 0)
             RemoveMenu(m_recentMenu, 0, MF_BYPOSITION);
@@ -176,14 +183,21 @@ public:
     void OpenRecent(int i) {
         std::vector<std::wstring> list = recent::load();
         if (i < 0 || (size_t)i >= list.size()) return;
-        if (fileio::file_exists(list[i])) {
-            OpenFile(list[i]);                 // re-adds, promoting it to front
+        OpenRecentPath(list[i]);
+    }
+
+    void OpenRecentPath(std::wstring path) {
+        if (fileio::file_exists(path)) {
+            OpenFile(path);                    // re-adds, promoting it to front
         } else {
-            std::wstring missing = list[i];
-            list.erase(list.begin() + i);
+            std::vector<std::wstring> list = recent::load();
+            for (size_t i = 0; i < list.size();) {
+                if (viewerinstance::same_path(list[i], path)) list.erase(list.begin() + i);
+                else ++i;
+            }
             recent::save(list);
             RefreshRecentMenu();
-            MessageBoxW(m_hwnd, (L"This file no longer exists:\n" + missing).c_str(),
+            MessageBoxW(m_hwnd, (L"This file no longer exists:\n" + path).c_str(),
                         cfg::kAppTitle, MB_OK | MB_ICONWARNING);
         }
     }
@@ -361,6 +375,9 @@ private:
     // same order last sent to the renderer's sidebar. The renderer references
     // them by index ("openfile:<i>") so it can never name an arbitrary path.
     std::vector<std::wstring> m_siblingFiles;
+    // Snapshot last shown on the homepage: another window can reorder the MRU
+    // on disk, but a click must still open the file the user actually selected.
+    std::vector<std::wstring> m_welcomeRecent;
 
     // Append `path` as the new current document, dropping any forward history.
     // A no-op when it equals the current entry (e.g. Open Recent on the open
@@ -553,6 +570,21 @@ private:
 
     void SendWelcome() {
         m_web.PostJson(L"{\"type\":\"welcome\"}");
+        SendRecent();
+    }
+
+    void SendRecent() {
+        if (!m_ready || !m_current.empty()) return;
+        m_welcomeRecent = recent::load();
+        std::string arr;
+        for (const auto& path : m_welcomeRecent) {
+            std::wstring dir, name;
+            fileio::split_path(path, dir, name);
+            if (!arr.empty()) arr += ",";
+            arr += "{\"name\":\"" + fileio::json_escape(fileio::narrow(name)) +
+                   "\",\"path\":\"" + fileio::json_escape(fileio::narrow(path)) + "\"}";
+        }
+        m_web.PostJson(fileio::widen("{\"type\":\"recent\",\"files\":[" + arr + "]}"));
     }
 
     void SendRender() {

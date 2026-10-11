@@ -135,6 +135,7 @@ public:
     std::function<void()>                    onBack;       // history toolbar: go back
     std::function<void()>                    onForward;    // history toolbar: go forward
     std::function<void(int)>                 onOpenSibling;// file sidebar: open the i-th listed file
+    std::function<void(int)>                 onOpenRecent; // welcome screen: open a listed recent file
     std::function<void()>                    onRefreshFiles;// file sidebar: re-scan the folder
     std::function<void(const std::wstring&)> onSaveDoc;    // editor asked to write the document text
     std::function<void()>                    onNoSave;     // editor answered a save request with "nothing to save"
@@ -324,6 +325,7 @@ private:
         //   "save:<json>"      - the settings panel wants <json> written to config.json
         //   "back"/"forward"   - the history toolbar's navigation buttons
         //   "openfile:<index>" - the file sidebar: open the index-th listed file
+        //   "openrecent:<index>" - the welcome screen: open a listed recent file
         //   "reloadfiles"      - the file sidebar's refresh button: re-scan the folder
         //   "savedoc:<text>"   - the editor wants <text> written to the open document
         //   "nosave"           - reply to {type:"save"} when there is nothing to write
@@ -342,6 +344,13 @@ private:
                     else if (s == L"forward") { if (onForward) onForward(); }
                     else if (s == L"reloadfiles") { if (onRefreshFiles) onRefreshFiles(); }
                     else if (s.rfind(L"openfile:", 0) == 0) { if (onOpenSibling) onOpenSibling(_wtoi(s.c_str() + 9)); }
+                    else if (s.rfind(L"openrecent:", 0) == 0) {
+                        const std::wstring index = s.substr(11);
+                        // Reject malformed messages rather than treating them as index 0.
+                        if (!index.empty() && index.size() <= 2 &&
+                            index.find_first_not_of(L"0123456789") == std::wstring::npos && onOpenRecent)
+                            onOpenRecent(_wtoi(index.c_str()));
+                    }
                     else if (s == L"nosave") { if (onNoSave) onNoSave(); }
                     else if (s.rfind(L"savedoc:", 0) == 0) { if (onSaveDoc) onSaveDoc(s.substr(8)); }
                     else if (s.rfind(L"dirty:", 0) == 0) { if (onDirty) onDirty(s.size() > 6 && s[6] == L'1'); }
