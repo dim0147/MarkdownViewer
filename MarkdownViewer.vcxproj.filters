@@ -39,6 +39,9 @@
     <ClInclude Include="src\fileio.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\viewerinstance.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="src\registry.h">
       <Filter>Header Files</Filter>
     </ClInclude>

@@ -94,6 +94,7 @@
     <ClInclude Include="src\assets.h" />
     <ClInclude Include="src\config.h" />
     <ClInclude Include="src\fileio.h" />
+    <ClInclude Include="src\viewerinstance.h" />
     <ClInclude Include="src\registry.h" />
     <ClInclude Include="src\settings.h" />
     <ClInclude Include="src\webview2host.h" />

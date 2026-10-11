@@ -29,6 +29,29 @@ html, body {
   background: var(--bg);
 }
 
+/* ----- code blocks: control stays outside the horizontally scrolling pre ----- */
+.mv-code-block { position: relative; margin: 0 0 16px; }
+#content .mv-code-block > pre { margin: 0; padding-top: 48px; }
+.mv-code-copy {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg-muted);
+  font: 12px/1.5 -apple-system, "Segoe UI", system-ui, sans-serif;
+  cursor: pointer;
+}
+.mv-code-copy:hover { border-color: var(--accent); color: var(--accent); }
+.mv-code-copy:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.mv-code-copy:disabled { cursor: wait; }
+@media print {
+  .mv-code-copy { display: none; }
+  #content .mv-code-block > pre { padding-top: 16px; }
+}
+
 /* ----- welcome screen (no document open) ----- */
 .welcome {
   text-align: center;

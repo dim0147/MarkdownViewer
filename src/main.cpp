@@ -56,6 +56,16 @@ static HMENU build_menu() {
 
 static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
+    case WM_COPYDATA: {
+        const auto* data = reinterpret_cast<const COPYDATASTRUCT*>(lp);
+        if (!data || data->dwData != viewerinstance::kQueryDocument || !data->lpData ||
+            data->cbData < sizeof(wchar_t) || data->cbData > 65536 ||
+            data->cbData % sizeof(wchar_t) != 0) return FALSE;
+        const auto* path = static_cast<const wchar_t*>(data->lpData);
+        const size_t count = data->cbData / sizeof(wchar_t);
+        if (path[count - 1] != L'\0') return FALSE;
+        return g_app.IsViewing(std::wstring(path, count - 1)) ? TRUE : FALSE;
+    }
     case WM_CREATE:
         if (!g_app.Init(hwnd)) return -1;
         DragAcceptFiles(hwnd, TRUE);
@@ -170,9 +180,14 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmdShow) {
     int argc = 0;
     LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
     if (argc > 1) {
-        if (lstrcmpiW(argv[1], L"--register") == 0)   { reg::install_context_menu(nullptr, true);  return 0; }
-        if (lstrcmpiW(argv[1], L"--unregister") == 0) { reg::uninstall_context_menu(nullptr, true); return 0; }
+        if (lstrcmpiW(argv[1], L"--register") == 0)   { reg::install_context_menu(nullptr, true); LocalFree(argv); return 0; }
+        if (lstrcmpiW(argv[1], L"--unregister") == 0) { reg::uninstall_context_menu(nullptr, true); LocalFree(argv); return 0; }
     }
+
+    viewerinstance::LaunchLock launchLock;
+    const std::wstring initialPath = argc > 1 ? fileio::full_path(argv[1]) : L"";
+    LocalFree(argv);
+    if (!initialPath.empty() && viewerinstance::focus_existing(initialPath)) return 0;
 
     if (FAILED(OleInitialize(nullptr))) return 1;
 
@@ -197,11 +212,11 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmdShow) {
 
     g_app.SetRecentMenu(g_recentMenu);   // populate File > Open Recent
 
-    if (argc > 1 && GetFileAttributesW(argv[1]) != INVALID_FILE_ATTRIBUTES)
-        g_app.OpenFile(argv[1]);     // queued until the renderer reports ready
+    if (!initialPath.empty() && GetFileAttributesW(initialPath.c_str()) != INVALID_FILE_ATTRIBUTES)
+        g_app.OpenFile(initialPath);     // queued until the renderer reports ready
     else
         g_app.ShowWelcome();
-    LocalFree(argv);
+    launchLock.Release();
 
     // Shortcuts while the (rarely focused) main window has focus; the same keys
     // inside the webview are forwarded by WebViewHost's AcceleratorKeyPressed.

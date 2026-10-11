@@ -31,6 +31,7 @@
 #include "assets.h"
 #include "webview2host.h"
 #include "update.h"
+#include "viewerinstance.h"
 
 class App {
 public:
@@ -73,12 +74,19 @@ public:
     // modal MessageBox blocks the drag source / risks re-entrancy, so the
     // prompt is deferred through the message queue (WM_APP_OPEN_PENDING).
     void OpenFile(const std::wstring& path) {
+        // Reopening never reloads or prompts to discard the existing editor.
+        if (IsViewing(path)) { viewerinstance::focus(m_hwnd); Focus(); return; }
+        if (viewerinstance::focus_existing(path, m_hwnd)) return;
         if (m_docDirty) {
             m_pendingOpen = path;
             PostMessageW(m_hwnd, cfg::WM_APP_OPEN_PENDING, 0, 0);
             return;
         }
         DoOpenFile(path);
+    }
+
+    bool IsViewing(const std::wstring& path) const {
+        return viewerinstance::same_path(m_current, path);
     }
 
     // WM_APP_OPEN_PENDING: run the save/discard/cancel prompt from the message
@@ -335,10 +343,11 @@ private:
 
     // The non-gated tail of OpenFile (see OpenFile for the deferral story).
     void DoOpenFile(const std::wstring& path) {
-        recent::add(path);
+        const std::wstring full = fileio::full_path(path);
+        recent::add(full);
         RefreshRecentMenu();
-        PushHistory(path);
-        Show(path);
+        PushHistory(full);
+        Show(full);
     }
 
     // Back/forward history: visited file paths oldest->newest, with m_historyIndex

@@ -24,6 +24,20 @@ int main() {
 }
 ```
 
+## Copy a prompt
+
+Use the Copy button to copy the entire block, including the text off-screen:
+
+```text
+Apply the master prompt and execute Phase 1 only. Preserve indentation, symbols like <tag> & "quotes", and Unicode: 中文 ✓.
+    This indented line and its trailing newline should also be copied.
+```
+
+An indented code block has the same Copy button:
+
+    First line
+    Second line
+
 ## Table
 
 | Feature      | Status | Notes          |

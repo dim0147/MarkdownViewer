@@ -146,6 +146,7 @@
       }).catch((err) => {
         pre.classList.add('mermaid-error');       // leave source visible on parse error
         pre.title = String((err && err.message) || err);
+        if (pre.isConnected) addCodeCopyButton(pre);
       });
     }
   }
@@ -289,6 +290,68 @@
     content.replaceChildren(fragment.content);
   }
 
+  // Copy plain text, never the syntax-highlighting markup or button label.
+  // The wrapper keeps the control fixed while a long code line scrolls.
+  function addCodeCopyButton(pre) {
+    const code = pre.querySelector('code');
+    if (!code || pre.parentElement?.classList.contains('mv-code-block')) return;
+    const text = code.textContent;
+    const wrapper = document.createElement('div');
+    wrapper.className = 'mv-code-block';
+    pre.replaceWith(wrapper);
+    wrapper.appendChild(pre);
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'mv-code-copy';
+    button.textContent = 'Copy';
+    button.title = 'Copy code to clipboard';
+    button.setAttribute('aria-label', 'Copy code to clipboard');
+    button.setAttribute('aria-live', 'polite');
+    let resetTimer;
+    button.addEventListener('click', async () => {
+      clearTimeout(resetTimer);
+      button.disabled = true;
+      try {
+        await copyText(text);
+        button.textContent = 'Copied!';
+      } catch (_) {
+        button.textContent = 'Copy failed';
+      } finally {
+        button.disabled = false;
+        resetTimer = setTimeout(() => { button.textContent = 'Copy'; }, 2000);
+      }
+    });
+    wrapper.appendChild(button);
+  }
+
+  async function copyText(text) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return;
+    } catch (_) { /* Older runtimes or denied clipboard API: use a user-initiated copy. */ }
+    const active = document.activeElement;
+    const selection = window.getSelection();
+    const ranges = [];
+    for (let i = 0; selection && i < selection.rangeCount; i++)
+      ranges.push(selection.getRangeAt(i).cloneRange());
+    const field = document.createElement('textarea');
+    field.value = text;
+    field.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none';
+    document.body.appendChild(field);
+    try {
+      field.focus({ preventScroll: true });
+      field.select();
+      if (!document.execCommand('copy')) throw new Error('Clipboard unavailable');
+    } finally {
+      field.remove();
+      active?.focus({ preventScroll: true });
+      if (selection) {
+        selection.removeAllRanges();
+        for (const range of ranges) selection.addRange(range);
+      }
+    }
+  }
+
   // The full document render pass: sanitize + inject, then the post-passes
   // (mermaid, math). render(), rerender() and the editor's live preview all
   // go through here so a future post-pass can't be wired into one and missed
@@ -297,6 +360,11 @@
     renderToContent(text);
     renderMermaid();
     renderMath();
+    for (const pre of content.querySelectorAll('pre')) {
+      // Mermaid replaces its source asynchronously; errors keep a copyable block.
+      if (window.mermaid && pre.querySelector('code.language-mermaid')) continue;
+      addCodeCopyButton(pre);
+    }
   }
 
   // Re-render the current document with the current parser (keeps scroll).

@@ -53,7 +53,7 @@ portable.
 
 - **GitHub-style rendering** (CommonMark + GFM via markdown-it): headings,
   lists, task lists, tables with alignment, fenced code blocks with **syntax
-  highlighting**, blockquotes, links, images, strikethrough, autolinks
+  highlighting** and **Copy buttons**, blockquotes, links, images, strikethrough, autolinks
 - **Diagrams** — ` ```mermaid ` fenced blocks render to SVG (theme-aware)
 - **Math** — LaTeX via KaTeX: inline `$…$`, display `$$…$$`, and ` ```math ` fences
 - **Collapsible sections** and other GitHub-flavored HTML (`<details>`,
@@ -63,6 +63,8 @@ portable.
   Viewer* (on Windows 11 it may be under *Show more options*)
 - **Drag & drop** a `.md` file anywhere on the window; `Ctrl+O` to browse;
   or pass a file on the command line
+- **Reuse open documents** — reopening the same file brings its existing viewer
+  to the front, preserving scroll position and unsaved edits
 - `F5` reloads the file *and* your settings (handy while editing)
 - Clicking a relative `.md` link opens it in the viewer; external links open
   in your default browser

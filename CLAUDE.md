@@ -44,6 +44,8 @@ src/                  C++ (header-only modules, all included by main.cpp)
   settings.h          runtime config.json (create defaults / load raw text)
   update.h            Help > Check for Updates: GitHub Releases API over
                       WinHTTP on a worker thread, version compare
+  viewerinstance.h    queries other viewer windows for the same document,
+                      restores/focuses matches; serializes concurrent launches
   assets.h            extracts embedded RCDATA assets to disk at startup
   registry.h          per-user (HKCU) Explorer context-menu install/remove
 assets/               web UI, embedded into the exe via res/app.rc
@@ -116,6 +118,20 @@ Key points:
   the renderer can enable/disable the buttons. The renderer keys per-document
   **scroll memory** off the `path` field in the `render` message (file names
   alone collide across folders).
+- **Reopening a document** first queries other `MarkdownViewerWnd` windows
+  via a bounded `WM_COPYDATA` path comparison (`viewerinstance.h`). A match
+  restores/focuses that window without changing either document or prompting
+  for unsaved edits. Command-line launches hold a session-local mutex until
+  their window has claimed its absolute document path, so simultaneous opens
+  also reuse the window before WebView2 is ready. Paths compare case-insensitively
+  after resolving relative paths and `.`/`..`. Opening the current file in the
+  same window only focuses it; use F5 to explicitly reload.
+- **Code-block copying** is added after sanitized rendering in `renderDoc()`:
+  `addCodeCopyButton` wraps each remaining `pre > code`, keeps the button outside
+  horizontal scrolling, and copies `code.textContent` (preserving whitespace).
+  It uses the Clipboard API with an `execCommand` fallback; live preview and
+  settings rerenders use the same pipeline. Mermaid diagrams are skipped;
+  failed Mermaid sources remain copyable.
 - **Editing** (`Ctrl+E` / File > Edit Document): app.js owns the editor — a
   fixed left pane with a plain `<textarea>` whose live preview on the right
   goes through the same `renderToContent()` sanitizing pipeline as any render.
@@ -216,8 +232,10 @@ or open `MarkdownViewer.sln` (VS 2022+, output under `build/`). Both routes
 auto-download the WebView2 SDK via `tools/get_webview2.ps1` (pinned version)
 into `third_party/` on first build. `res/icon.ico` is generated on first build.
 
-There is no test suite; verification is: build, run
-`MarkdownViewer.exe test\sample.md`, and eyeball the output (headings, task
+After building, run `node test/relative-images.mjs` and
+`node test/copy-and-reopen.mjs` for real WebView2 rendering, clipboard, and
+native window-reuse checks. Also run `MarkdownViewer.exe test\sample.md`,
+and eyeball the output (headings, task
 checkboxes, highlighted C++ block, table alignment, dark mode if the OS is
 dark). Update `test/sample.md` when adding renderer features. After touching
 navigation/link handling, also open `test\manual\README-test.md` and click
